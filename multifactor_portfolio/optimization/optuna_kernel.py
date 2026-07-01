@@ -7,6 +7,7 @@ import operator
 import numpy as np
 import pandas as pd
 import optuna
+import contextlib
 
 # Add strategy path to sys.path
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -14,6 +15,19 @@ project_root = os.path.dirname(os.path.dirname(script_dir))
 sys.path.append(project_root)
 
 from multifactor_portfolio.training.train import load_ohlcv_data, run_strategy_backtest
+
+class DummyFile(object):
+    def write(self, x): pass
+    def flush(self): pass
+
+@contextlib.contextmanager
+def nostdout():
+    save_stdout = sys.stdout
+    sys.stdout = DummyFile()
+    try:
+        yield
+    finally:
+        sys.stdout = save_stdout
 
 class EarlyStoppingCallback(object):
     def __init__(self, early_stopping_rounds: int, direction: str = "maximize") -> None:
@@ -38,14 +52,11 @@ class EarlyStoppingCallback(object):
             study.stop()
 
 def logging_callback(study, frozen_trial, strategy_name, config_info=""):
-    previous_best_value = study.user_attrs.get("previous_best_value", None)
-    if previous_best_value != study.best_value:
-        study.set_user_attr("previous_best_value", study.best_value)
-        log_dir = os.path.join(project_root, "multifactor_portfolio", "optimization", "logs")
-        os.makedirs(log_dir, exist_ok=True)
-        log_path = os.path.join(log_dir, f"{strategy_name}_optuna_log.txt")
-        with open(log_path, "a") as f:
-            f.write(f"Trial {frozen_trial.number}: Params = {str(frozen_trial.params)}, Sharpe = {str(frozen_trial.value)} ({config_info})\n")
+    log_dir = "/root/bobby/pool_alpha/alphas_storage/logs"
+    os.makedirs(log_dir, exist_ok=True)
+    log_path = os.path.join(log_dir, f"{strategy_name}_optuna_log.txt")
+    with open(log_path, "a") as f:
+        f.write(f"Trial {frozen_trial.number}: Params = {str(frozen_trial.params)}, Value = {str(frozen_trial.value)}\n")
 
 class DuplicatePruner(optuna.pruners.BasePruner):
     def __init__(self):
@@ -90,14 +101,15 @@ def optimize_parameters(
                     params[k] = v
 
         try:
-            _, _, metrics = run_strategy_backtest(
-                data_dict=raw_dict,
-                params=params,
-                local_data_dir=local_data_dir
-            )
+            with nostdout():
+                _, _, metrics = run_strategy_backtest(
+                    data_dict=raw_dict,
+                    params=params,
+                    local_data_dir=local_data_dir
+                )
             return metrics["sharpe_ratio"]
         except Exception as e:
-            print(f"Error in trial: {e}")
+            # Re-raise to help debug if needed, or return error score
             return -999.0
 
     study = optuna.create_study(
@@ -157,12 +169,11 @@ def main():
         "split_mode": all_params.get("split_mode", "walk_forward_2022")
     }
     
-    # We run fewer trials to keep execution within a reasonable time, user can increase this
     print("Starting Optuna optimization...")
     best_params, best_sharpe = optimize_parameters(
         raw_dict=raw_dict,
         param_ranges=param_ranges,
-        strategy_name="multifactor_portfolio_optuna",
+        strategy_name="multifactor_portfolio",
         n_trials=50,
         fixed_params=fixed,
         use_fixed_params=True
