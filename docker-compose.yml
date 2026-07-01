@@ -1,0 +1,18 @@
+version: '3.8'  
+  
+services:  
+  mlflow:  
+    image: ghcr.io/mlflow/mlflow:v2.10.2  
+    ports:  
+      - "5000:5000"  
+    command: mlflow server --host 0.0.0.0 --port 5000  
+  
+  serve:  
+    build: .  
+    ports:  
+      - "8000:8000"  
+    environment:  
+      - MLFLOW_TRACKING_URI=http://mlflow:5000  
+      - MODEL_URI=models:/multifactor_portfolio_model/Production  
+    depends_on:  
+      - mlflow  

@@ -1,0 +1,43 @@
+{
+  "features": {
+    "ma_length": 75,
+    "rsi_upper": 75,
+    "rsi_lower": 40,
+    "volume_period": 10,
+    "carry_window": 70,
+    "risk_window": 60
+  },
+  "dataset": {
+    "asset_class": "crypto",
+    "universe_name": "binance_daily",
+    "top_n_symbols": 40
+  },
+  "training": {
+    "split_mode": "walk_forward_2022",
+    "fee": 0.0005,
+    "allocation_cap": 0.15000000000000002,
+    "lag": 1,
+    "quantiles": 15,
+    "trading_days_per_year": 365
+  },
+  "registration": {
+    "tags": [
+      "sharpe_ratio",
+      "cagr",
+      "max_drawdown",
+      "ma_length",
+      "rsi_upper",
+      "rsi_lower",
+      "volume_period",
+      "carry_window",
+      "risk_window",
+      "top_n_symbols",
+      "fee",
+      "allocation_cap",
+      "lag",
+      "quantiles",
+      "asset_class",
+      "universe_name"
+    ]
+  }
+}

@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+.env
+mlflow.db
+mlruns/
+model_bundle.joblib
+performance_chart.png
+performance_report.txt
+universe_symbols.json
+.pytest_cache/
+.optuna_logs/
+logs/
+data/
+*.csv.gz

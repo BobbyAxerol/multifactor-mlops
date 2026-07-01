@@ -1,0 +1,124 @@
+from __future__ import annotations
+import pandas as pd
+import numpy as np
+from dataclasses import dataclass
+from typing import Dict, List, Optional, Any
+
+@dataclass
+class PortfolioBacktestResult:
+    portfolio_returns: pd.Series
+    component_returns: pd.DataFrame
+    transaction_costs: pd.Series
+    lag: int
+
+    def split(self, start_date, end_date) -> PortfolioBacktestResult:
+        return PortfolioBacktestResult(
+            portfolio_returns=self.portfolio_returns[start_date:end_date],
+            component_returns=self.component_returns[start_date:end_date],
+            transaction_costs=self.transaction_costs[start_date:end_date],
+            lag=self.lag,
+        )
+
+def get_underlying_price_df(klines_dict: dict[str, pd.DataFrame], target_symbols: list[str]) -> pd.DataFrame:
+    """
+    Extract and merge Close prices into a wide DataFrame for target symbols.
+    """
+    price_series = {}
+    CLOSE_COLUMNS = ['Close', 'close', '4'] 
+
+    for symbol in target_symbols:
+        if symbol not in klines_dict:
+            continue
+            
+        df = klines_dict[symbol]
+        found_close_col = None
+        for col_name in CLOSE_COLUMNS:
+            if col_name in df.columns:
+                found_close_col = col_name
+                break
+        
+        if found_close_col:
+            series = df[found_close_col].rename(symbol)
+            if isinstance(series.index, pd.MultiIndex):
+                series = series.droplevel(series.index.names[1:]) 
+            price_series[symbol] = series.sort_index()
+
+    if not price_series:
+        print("Warning: No close price found for target symbols.")
+        return pd.DataFrame()
+
+    underlying_df = pd.concat(price_series.values(), axis=1, join='outer')
+    try:
+        underlying_df.index = pd.to_datetime(underlying_df.index)
+    except Exception:
+        pass
+        
+    return underlying_df.sort_index()
+
+def calculate_inverse_volatility_weighting(
+    underlying: pd.DataFrame, weights: pd.DataFrame, period: int
+) -> pd.DataFrame:
+    """
+    Calculate Inverse Volatility Weights based on daily returns std.
+    """
+    # 1. Compute standard deviation of returns
+    stds = underlying.rolling(period, min_periods=0).std()
+    
+    # 2. Filter out NaNs where no primary weight exists
+    stds = stds.where(weights.notna())
+
+    # 3. Inverse stds and normalize
+    std_inverse = 1 / stds.div(stds.sum(axis="columns"), axis="index")
+    
+    # 4. Handle division by zero
+    std_inverse[std_inverse == np.inf] = 0.0
+    
+    # 5. Final normalization scaled by active assets count
+    return std_inverse.div(std_inverse.sum(axis="columns"), axis="index").mul(
+        weights.count(axis="columns"), axis="index"
+    ).fillna(0.0)
+
+def backtest_portfolio(
+    weights: pd.DataFrame,
+    underlying: pd.DataFrame,
+    transaction_cost: float,
+    lag: int,
+) -> PortfolioBacktestResult:
+    """
+    Runs the portfolio backtest using weights and underlying price.
+    """
+    # 1. Calculate daily returns from Close price
+    underlying_returns = underlying.pct_change()
+
+    # 2. Align indexes and columns
+    common_index = weights.index.intersection(underlying_returns.index)
+    common_index = common_index[1:]  # skip the first row (NaN from pct_change)
+    
+    underlying_returns = underlying_returns.loc[common_index]
+    weights = weights.loc[common_index]
+
+    # Align columns to match weights columns
+    if not weights.columns.equals(underlying_returns.columns):
+        common_cols = [c for c in weights.columns if c in underlying_returns.columns]
+        weights = weights[common_cols]
+        underlying_returns = underlying_returns[common_cols]
+
+    assert weights.columns.equals(underlying_returns.columns), "Symbols must match between Weights and Returns"
+    
+    weights = weights.fillna(0.0).ffill().copy()
+
+    # 3. Transaction costs calculation
+    delta_pos = weights.diff(1).abs().fillna(0.0)
+    costs = transaction_cost * delta_pos
+    
+    # 4. Portfolio returns calculation
+    returns = (underlying_returns * weights.shift(lag)) - costs
+    portfolio_returns = returns.sum(axis="columns")
+    transaction_costs = costs.sum(axis="columns")
+    
+    return PortfolioBacktestResult(
+        portfolio_returns=portfolio_returns,
+        component_returns=returns,
+        transaction_costs=transaction_costs,
+        lag=lag,
+    )
