@@ -9,6 +9,7 @@ import numpy as np
 import mlflow  
 import mlflow.pyfunc  
 import datetime  
+import xgboost as xgb
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -90,13 +91,16 @@ def main():
         if not raw_dict:  
              raise ValueError(f"No data found at {args.data_path}")  
            
-        # Run strategy backtest (which downloads / reads local cache files automatically)
         local_data_dir = os.path.join(project_root, "data")
         portfolio_weights, final_equity_df, metrics = run_strategy_backtest(
             data_dict=raw_dict,
             params=all_params,
             local_data_dir=local_data_dir
         )
+        
+        # Extract model artifacts
+        bst = metrics.pop('__bst__', None)
+        active_symbols = metrics.pop('__selected_features__', None)
         
         symbols_list = list(portfolio_weights.columns)
         with open("universe_symbols.json", "w") as sf:
@@ -110,18 +114,37 @@ def main():
             save_performance_chart(final_equity_df, "performance_chart.png")
             mlflow.log_artifact("performance_chart.png")
           
-        # Bundle parameters to save in the model
+        # Save model parameters & active symbols list
         model_bundle = {  
             'params': all_params,
             'symbols': symbols_list
         }  
         joblib.dump(model_bundle, "model_bundle.joblib")  
+        
+        # Save XGBoost model booster to JSON
+        if bst is not None:
+            bst.save_model("model.json")
+        else:
+            # Fallback if no model was trained
+            dummy_bst = xgb.train({'objective': 'reg:squarederror'}, xgb.DMatrix(np.zeros((2,2)), label=np.zeros(2)), num_boost_round=1)
+            dummy_bst.save_model("model.json")
+            
+        selected_path = os.path.join(project_root, "multifactor_portfolio", "research", "selected_features.json")
+        if not os.path.exists(selected_path):
+            # Create a fallback empty list if not analyzed yet
+            os.makedirs(os.path.dirname(selected_path), exist_ok=True)
+            with open(selected_path, "w") as sf:
+                json.dump([], sf)
           
         # Log Python PyFunc Model
         mlflow.pyfunc.log_model(  
             artifact_path="model",  
             python_model=MultifactorPortfolioModelWrapper(),  
-            artifacts={"model_bundle": "model_bundle.joblib"},
+            artifacts={
+                "model_bundle": "model_bundle.joblib",
+                "model_xgb": "model.json",
+                "selected_features": selected_path
+            },
             code_paths=[os.path.join(project_root, "multifactor_portfolio")]
         )  
   
@@ -134,12 +157,9 @@ def main():
             mlflow.set_tag("mlflow.model.version", model_version.version)  
             client = mlflow.tracking.MlflowClient()
             desc = (
-                f"### Model Version Card\n"
+                f"### XGBoost Model Version Card\n"
                 f"- **Trained At**: {datetime.datetime.now().isoformat()}\n"
                 f"- **Git Commit**: {sha} (Branch: {branch}, Dirty: {is_dirty})\n"
-                f"- **Strategy Parameters**: ma_length={features_args.get('ma_length')}, "
-                f"rsi_lower={features_args.get('rsi_lower')}, rsi_upper={features_args.get('rsi_upper')}\n"
-                f"- **Dataset**: Asset Class={asset_class}, Universe={universe_name}, Top N={top_n}\n"
                 f"- **Performance (OOS Backtest)**:\n"
                 f"  - Sharpe Ratio: {metrics.get('sharpe_ratio', 0.0)}\n"
                 f"  - CAGR: {metrics.get('cagr', 0.0)}\n"
@@ -165,9 +185,10 @@ def main():
         report.append(f"Universe Name: {universe_name}")
         report.append(f"Lag: {all_params.get('lag')}")  
         report.append(f"Transaction Fee: {all_params.get('fee')}")  
-          
-        report.append(f"Data Start Date: {final_equity_df['time'].min().strftime('%Y-%m-%d')}")  
-        report.append(f"Data End Date: {final_equity_df['time'].max().strftime('%Y-%m-%d')}")  
+        
+        if not final_equity_df.empty:
+            report.append(f"Data Start Date: {final_equity_df['time'].min().strftime('%Y-%m-%d')}")  
+            report.append(f"Data End Date: {final_equity_df['time'].max().strftime('%Y-%m-%d')}")  
         report.append(f"Total Symbols: {len(symbols_list)}")  
         report.append("----------------------------------------------------")  
         report.append("Performance Metrics:")  

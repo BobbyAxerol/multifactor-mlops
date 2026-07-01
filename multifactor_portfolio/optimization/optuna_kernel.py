@@ -109,7 +109,6 @@ def optimize_parameters(
                 )
             return metrics["sharpe_ratio"]
         except Exception as e:
-            # Re-raise to help debug if needed, or return error score
             return -999.0
 
     study = optuna.create_study(
@@ -147,14 +146,11 @@ def main():
         print("Failed to load data.")
         sys.exit(1)
         
-    # Hyperparameter search ranges
+    # Hyperparameter search ranges for XGBoost & Portfolio
     param_ranges = {
-        "ma_length": (10, 100, 5),
-        "rsi_upper": (55, 85, 5),
-        "rsi_lower": (15, 45, 5),
-        "volume_period": (10, 50, 5),
-        "carry_window": (20, 120, 10),
-        "risk_window": (10, 90, 10),
+        "learning_rate": (0.01, 0.20, 0.01),
+        "max_depth": (3, 8, 1),
+        "num_boost_round": (50, 300, 10),
         "quantiles": (10, 40, 5),
         "allocation_cap": (0.05, 0.40, 0.05)
     }

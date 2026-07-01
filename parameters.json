@@ -1,11 +1,8 @@
 {
   "features": {
-    "ma_length": 75,
-    "rsi_upper": 75,
-    "rsi_lower": 40,
-    "volume_period": 10,
-    "carry_window": 70,
-    "risk_window": 60
+    "learning_rate": 0.05,
+    "max_depth": 4,
+    "num_boost_round": 100
   },
   "dataset": {
     "asset_class": "crypto",
@@ -15,9 +12,9 @@
   "training": {
     "split_mode": "walk_forward_2022",
     "fee": 0.0005,
-    "allocation_cap": 0.15000000000000002,
+    "allocation_cap": 0.2,
     "lag": 1,
-    "quantiles": 15,
+    "quantiles": 20,
     "trading_days_per_year": 365
   },
   "registration": {
@@ -25,12 +22,9 @@
       "sharpe_ratio",
       "cagr",
       "max_drawdown",
-      "ma_length",
-      "rsi_upper",
-      "rsi_lower",
-      "volume_period",
-      "carry_window",
-      "risk_window",
+      "learning_rate",
+      "max_depth",
+      "num_boost_round",
       "top_n_symbols",
       "fee",
       "allocation_cap",

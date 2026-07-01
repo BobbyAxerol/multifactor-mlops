@@ -389,11 +389,12 @@ class CrossSectionalFactorEngine:
         weights = np.arange(1, window + 1).astype(np.float64)
         return np.sum(values[-window:] * weights) / weights.sum()
 
-    def _custom_wma(self, series: pd.Series, window: int) -> pd.Series:
+    @classmethod
+    def _custom_wma(cls, series: pd.Series, window: int) -> pd.Series:
         arr = series.values
         result = np.full(len(arr), np.nan)
         for i in range(window - 1, len(arr)):
-            result[i] = self._wma_numba(arr[:i+1], window)
+            result[i] = cls._wma_numba(arr[:i+1], window)
         return pd.Series(result, index=series.index)
 
     @staticmethod
@@ -444,3 +445,151 @@ class CrossSectionalFactorEngine:
                 is_bullish = is_bearish = False
 
         return pos
+
+    @classmethod
+    def calculate_volume_delta_proxy(cls, klines: pd.DataFrame) -> pd.Series:
+        """
+        Intraday Cumulative Volume Delta (CVD) Proxy.
+        CVD_approx = Volume * (2 * Close - High - Low) / (High - Low)
+        """
+        high = klines['high']
+        low = klines['low']
+        close = klines['close']
+        volume = klines['volume']
+        
+        denom = (high - low).replace(0, np.nan)
+        cvd = volume * (2 * close - high - low) / denom
+        return cvd.fillna(0.0)
+
+    @classmethod
+    def calculate_open_interest_proxy(cls, klines: pd.DataFrame, window: int = 30) -> pd.Series:
+        """
+        Open Interest Proxy.
+        OI_approx = Rolling Mean(Volume * Close, window) / Rolling Std(Return, window)
+        """
+        value = klines['volume'] * klines['close']
+        oi_mean = value.rolling(window=window, min_periods=min(5, window)).mean()
+        
+        log_ret = np.log(klines['close'] / klines['close'].shift(1))
+        volatility = log_ret.rolling(window=window, min_periods=min(5, window)).std().replace(0, np.nan)
+        
+        oi_proxy = oi_mean / volatility
+        return oi_proxy.ffill().fillna(0.0)
+
+    @classmethod
+    def generate_features_for_symbol(
+        cls,
+        kline_df: pd.DataFrame,
+        funding_series: pd.Series,
+        windows: List[int] = [7, 14, 30, 60, 90]
+    ) -> pd.DataFrame:
+        """
+        Tạo toàn bộ bộ Features đa khung thời gian cho một Symbol dựa trên OHLCV và Funding Rate.
+        """
+        kline_df = kline_df.sort_index()
+        close = kline_df['close']
+        high = kline_df['high']
+        low = kline_df['low']
+        volume = kline_df['volume']
+        
+        cvd_proxy = cls.calculate_volume_delta_proxy(kline_df)
+        features_dict = {}
+        log_ret = np.log(close / close.shift(1))
+        
+        funding_aligned = funding_series.reindex(kline_df.index).fillna(0.0)
+        annualized_funding = funding_aligned * 3 * 365
+        
+        for w in windows:
+            vol = log_ret.rolling(window=w, min_periods=min(3, w)).std()
+            vol_clean = vol.replace(0, np.nan)
+            
+            # --- A. MOMENTUM FEATURE ---
+            delta = close.diff()
+            gain = (delta.where(delta > 0, 0)).rolling(window=w, min_periods=min(3, w)).mean()
+            loss = (-delta.where(delta < 0, 0)).rolling(window=w, min_periods=min(3, w)).mean()
+            rs = gain / loss.replace(0, np.nan)
+            rsi = 100 - (100 / (1 + rs))
+            
+            wma = cls._custom_wma(close, w)
+            atr = cls._calculate_atr(kline_df, w)
+            
+            features_dict[f'mom_rsi_{w}'] = rsi.fillna(50)
+            features_dict[f'mom_wma_dist_{w}'] = ((close - wma) / (atr.replace(0, np.nan))).fillna(0.0)
+            
+            # --- B. RETAIL FLOW FEATURE (Contrarian) ---
+            volume_ma = volume.rolling(window=w, min_periods=min(3, w)).mean()
+            volume_ratio = volume / volume_ma.replace(0, np.nan)
+            retail_flow = -(log_ret * (volume_ratio / vol_clean))
+            features_dict[f'retail_flow_{w}'] = retail_flow.fillna(0.0)
+            
+            # --- C. CARRY FEATURE ---
+            funding_ma = annualized_funding.rolling(window=w, min_periods=min(3, w)).mean()
+            funding_anomaly = annualized_funding - funding_ma
+            vol_annual = vol * np.sqrt(365)
+            carry = (annualized_funding / vol_annual.replace(0, np.nan)) + funding_anomaly
+            features_dict[f'carry_{w}'] = carry.fillna(0.0)
+            
+            # --- D. MARGIN RISK FEATURE (Proxy-based) ---
+            oi_proxy = cls.calculate_open_interest_proxy(kline_df, window=w)
+            oi_ma = oi_proxy.rolling(window=w, min_periods=min(3, w)).mean()
+            oi_std = oi_proxy.rolling(window=w, min_periods=min(3, w)).std().replace(0, np.nan)
+            oi_zscore = (oi_proxy - oi_ma) / oi_std
+            
+            cvd_ma = cvd_proxy.rolling(window=w, min_periods=min(3, w)).mean()
+            vol_sum = volume.rolling(window=w, min_periods=min(3, w)).mean().replace(0, np.nan)
+            cvd_imbalance = abs(cvd_ma / vol_sum)
+            
+            margin_risk = (oi_zscore * cvd_imbalance) / vol_clean
+            features_dict[f'margin_risk_{w}'] = margin_risk.fillna(0.0)
+            
+        features_df = pd.DataFrame(features_dict, index=kline_df.index)
+        return features_df
+
+    @classmethod
+    def prepare_panel_dataset(
+        cls,
+        data_dict: Dict[str, pd.DataFrame],
+        funding_df: pd.DataFrame,
+        symbols: List[str],
+        windows: List[int] = [7, 14, 30, 60, 90],
+        lag: int = 1
+    ) -> pd.DataFrame:
+        """
+        Tạo Panel Dataset chứa features của tất cả active symbols và target forward return.
+        """
+        panel_list = []
+        
+        funding_daily = pd.DataFrame()
+        if not funding_df.empty:
+            funding_daily = funding_df.resample('1D').last()
+            
+        for symbol in symbols:
+            if symbol not in data_dict:
+                continue
+            kline_df = data_dict[symbol].copy()
+            if kline_df.empty or len(kline_df) < max(windows):
+                continue
+                
+            if not funding_daily.empty and symbol in funding_daily.columns:
+                funding_series = funding_daily[symbol]
+            else:
+                funding_series = pd.Series(0.0, index=kline_df.index)
+                
+            features_df = cls.generate_features_for_symbol(kline_df, funding_series, windows)
+            
+            close = kline_df['close']
+            forward_return = (close.shift(-lag) / close - 1).rename('target')
+            
+            symbol_df = pd.concat([features_df, forward_return], axis=1)
+            symbol_df['Symbol'] = symbol
+            symbol_df = symbol_df.dropna(subset=['target'])
+            
+            panel_list.append(symbol_df)
+            
+        if not panel_list:
+            return pd.DataFrame()
+            
+        panel_df = pd.concat(panel_list)
+        panel_df.index.name = 'Time'
+        panel_df = panel_df.reset_index().set_index(['Time', 'Symbol']).sort_index()
+        return panel_df

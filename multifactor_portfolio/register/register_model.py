@@ -9,68 +9,107 @@ load_dotenv()
 class MultifactorPortfolioModelWrapper(mlflow.pyfunc.PythonModel):
     def load_context(self, context):
         """
-        Loads the serialized model/parameter bundle.
+        Loads the serialized model/parameter bundle and XGBoost booster.
         """
+        import joblib
+        import xgboost as xgb
+        import json
+        
         self.model_bundle = joblib.load(context.artifacts["model_bundle"])
         self.params = self.model_bundle["params"]
         self.symbols = self.model_bundle["symbols"]
+        
+        # Load XGBoost model booster
+        self.bst = xgb.Booster()
+        self.bst.load_model(context.artifacts["model_xgb"])
+        
+        # Load selected features list
+        with open(context.artifacts["selected_features"]) as f:
+            self.selected_features = json.load(f)
 
     def predict(self, context, model_input):
         """
-        Receives strategy inputs and generates the target portfolio weights.
-        Supports:
-        1. A dictionary of dataframes: {'klines_dict': dict, 'ls_ratio_df': DataFrame, 'oi_df': DataFrame, 'funding_df': DataFrame}
-        2. Returns a dictionary of the latest target weights by symbol.
+        Receives real-time strategy inputs and generates the target portfolio weights.
         """
         import pandas as pd
         import numpy as np
+        import xgboost as xgb
         from multifactor_portfolio.util.factors import CrossSectionalFactorEngine
         from multifactor_portfolio.util.rebalance import calculate_inverse_volatility_weighting, get_underlying_price_df
         
         if not isinstance(model_input, dict):
-            # Fallback for generic/empty inputs
             return {}
 
         klines_dict = model_input.get('klines_dict', {})
-        ls_ratio_df = model_input.get('ls_ratio_df', pd.DataFrame())
-        oi_df = model_input.get('oi_df', pd.DataFrame())
         funding_df = model_input.get('funding_df', pd.DataFrame())
         
         if not klines_dict:
             return {}
             
-        # Instantiate factor engine
-        engine = CrossSectionalFactorEngine(
-            symbols=self.symbols, 
-            quantiles=self.params.get('quantiles', 20)
-        )
+        # 1. Determine active universe (top 40 liquid symbols)
+        kline_list = []
+        for symbol, df in klines_dict.items():
+            temp_df = df.copy()
+            temp_df['Symbol'] = symbol
+            temp_df.index.name = 'time'
+            kline_list.append(temp_df.set_index('Symbol', append=True).reorder_levels(['Symbol', 'time']))
+            
+        klines_all = pd.concat(kline_list).sort_index() if kline_list else pd.DataFrame()
+        temp_engine = CrossSectionalFactorEngine(symbols=[], quantiles=self.params.get('quantiles', 20))
+        top_n = self.params.get('top_n_symbols', 40)
+        _ = temp_engine.calculate_market_cap_proxy(klines_all, top_n=top_n)
+        target_symbols = temp_engine.symbols
         
-        # Calculate primary weights
-        final_weights_df = engine.run_factor_engine(
-            klines_dict=klines_dict,
-            ls_ratio_df=ls_ratio_df,
-            oi_df=oi_df,
-            funding_df=funding_df,
-            momentum_params={
-                'ma_length': self.params.get('ma_length', 20),
-                'rsi_lower': self.params.get('rsi_lower', 50),
-                'rsi_upper': self.params.get('rsi_upper', 60)
-            },
-            retail_params={
-                'volume_period': self.params.get('volume_period', 20)
-            },
-            carry_window=self.params.get('carry_window', 60),
-            risk_window=self.params.get('risk_window', 30),
-            top_n_symbols=self.params.get('top_n_symbols', 40)
-        )
+        # 2. Resample funding to daily
+        funding_daily = pd.DataFrame()
+        if not funding_df.empty:
+            funding_daily = funding_df.resample('1D').last()
+            
+        # 3. Generate features for active symbols
+        symbol_dfs = []
+        windows = [7, 14, 30, 60, 90]
         
-        if final_weights_df.empty:
+        for symbol in target_symbols:
+            if symbol not in klines_dict:
+                continue
+            kline_df = klines_dict[symbol]
+            if kline_df.empty or len(kline_df) < max(windows):
+                continue
+                
+            if not funding_daily.empty and symbol in funding_daily.columns:
+                funding_series = funding_daily[symbol]
+            else:
+                funding_series = pd.Series(0.0, index=kline_df.index)
+                
+            # Get the features at the latest timestamp
+            features_df = CrossSectionalFactorEngine.generate_features_for_symbol(kline_df, funding_series, windows)
+            latest_features = features_df.iloc[-1:].copy()
+            latest_features['Symbol'] = symbol
+            symbol_dfs.append(latest_features)
+            
+        if not symbol_dfs:
             return {}
             
-        # Refine weights with inverse volatility weighting
-        target_symbols = final_weights_df.columns.tolist()
-        underlying = get_underlying_price_df(klines_dict, target_symbols)
+        test_panel = pd.concat(symbol_dfs)
+        test_panel.index.name = 'Time'
+        test_panel = test_panel.reset_index().set_index(['Time', 'Symbol'])
         
+        # Select features
+        X_test = test_panel[self.selected_features].fillna(0.0)
+        
+        # Predict expected returns using XGBoost
+        dtest = xgb.DMatrix(X_test)
+        preds = self.bst.predict(dtest)
+        
+        # Unstack predictions
+        predicted_returns_df = pd.Series(preds, index=test_panel.index).unstack(level='Symbol').fillna(0.0)
+        
+        # 4. Cross-sectional binning on predictions
+        engine_bin = CrossSectionalFactorEngine(symbols=target_symbols, quantiles=self.params.get('quantiles', 20))
+        final_weights_df = engine_bin.create_cross_sectional_bins(predicted_returns_df)
+        
+        # 5. Inverse Volatility scaling
+        underlying = get_underlying_price_df(klines_dict, target_symbols)
         if underlying.empty:
             return final_weights_df.iloc[-1].to_dict()
             
@@ -85,7 +124,6 @@ class MultifactorPortfolioModelWrapper(mlflow.pyfunc.PythonModel):
         allocation_cap = self.params.get('allocation_cap', 0.2)
         portfolio_weights = portfolio_weights.clip(lower=-allocation_cap, upper=allocation_cap)
         
-        # Return the latest target weights as dictionary
         return portfolio_weights.iloc[-1].fillna(0.0).to_dict()
 
 def main():
