@@ -40,8 +40,8 @@ def run_feature_analysis():
         all_dates = all_dates.union(df.index)
     all_dates = pd.DatetimeIndex(sorted(all_dates))
     
-    # 3. Filter timeline to pre-2022 (Training phase only to prevent leakage)
-    train_dates = all_dates[all_dates < pd.Timestamp('2022-01-01')]
+    # 3. Filter timeline to pre-2024 (Training phase only to prevent leakage)
+    train_dates = all_dates[all_dates < pd.Timestamp('2024-01-01')]
     print(f"Feature Analysis Train period: {train_dates.min().strftime('%Y-%m-%d')} to {train_dates.max().strftime('%Y-%m-%d')}")
     
     train_dict = {sym: df.loc[df.index.intersection(train_dates)] for sym, df in data_dict.items()}
@@ -71,14 +71,14 @@ def run_feature_analysis():
         symbols=target_symbols,
         data_dir=local_data_dir,
         start_date=start_date,
-        end_date='2021-12-31'
+        end_date='2023-12-31'
     )
     funding_df = futures_data['funding']
     
     # 6. Generate Panel Dataset
     from multifactor_portfolio.util.macro_collector import download_macro_features
     print("Downloading/Loading macro features...")
-    macro_df = download_macro_features(local_data_dir, start_date=start_date, end_date='2021-12-31')
+    macro_df = download_macro_features(local_data_dir, start_date=start_date, end_date='2023-12-31')
     
     windows = [7, 14, 30, 60, 90]
     print(f"Generating candidate features on windows: {windows}...")
