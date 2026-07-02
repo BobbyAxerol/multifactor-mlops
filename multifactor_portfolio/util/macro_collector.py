@@ -7,7 +7,7 @@ from typing import Optional, Dict
 
 def update_deribit_dvol(data_dir: str, start_date: str = '2020-01-01') -> pd.DataFrame:
     """
-    Downloads and updates Deribit DVOL (Implied Volatility Index) for BTC and ETH.
+    Downloads and updates Deribit DVOL (Implied Volatility Index) for BTC and ETH using pagination.
     """
     file_path = os.path.join(data_dir, "macro_deribit_dvol.csv.gz")
     existing_df = pd.DataFrame()
@@ -32,24 +32,37 @@ def update_deribit_dvol(data_dir: str, start_date: str = '2020-01-01') -> pd.Dat
     if existing_df.empty or (datetime.now() - existing_df.index.max()).days >= 1:
         dvol_data = {}
         for cur in ['BTC', 'ETH']:
-            try:
-                url = f"https://www.deribit.com/api/v2/public/get_volatility_index_data?currency={cur}&resolution=1D&start_timestamp={start_ts}&end_timestamp={end_ts}"
-                res = requests.get(url, timeout=15)
-                if res.status_code == 200:
-                    data = res.json().get('result', {}).get('data', [])
-                    # data format: [timestamp, open, high, low, close]
-                    if data:
-                        dates = pd.to_datetime([x[0] for x in data], unit='ms').floor('1D')
-                        closes = [x[4] for x in data]
-                        dvol_data[f'dvol_{cur.lower()}'] = pd.Series(closes, index=dates)
-            except Exception as e:
-                print(f"Failed to fetch Deribit DVOL for {cur}: {e}")
+            cur_data = []
+            temp_start = start_ts
+            while temp_start < end_ts:
+                # Request in chunks of 500 days to be safe (~43,200,000,000 ms)
+                temp_end = min(temp_start + 43200000000, end_ts)
+                url = f"https://www.deribit.com/api/v2/public/get_volatility_index_data?currency={cur}&resolution=1D&start_timestamp={temp_start}&end_timestamp={temp_end}"
+                try:
+                    res = requests.get(url, timeout=15)
+                    if res.status_code == 200:
+                        data = res.json().get('result', {}).get('data', [])
+                        if data:
+                            cur_data.extend(data)
+                            # Advance start to the last date returned + 1 day
+                            temp_start = data[-1][0] + 86400000
+                        else:
+                            break
+                    else:
+                        break
+                except Exception as e:
+                    print(f"Failed to fetch Deribit DVOL for {cur}: {e}")
+                    break
+            
+            if cur_data:
+                dates = pd.to_datetime([x[0] for x in cur_data], unit='ms').floor('1D')
+                closes = [x[4] for x in cur_data]
+                dvol_data[f'dvol_{cur.lower()}'] = pd.Series(closes, index=dates)
                 
         if dvol_data:
             new_df = pd.DataFrame(dvol_data)
             if not existing_df.empty:
                 combined = pd.concat([existing_df, new_df], axis=0)
-                # Drop duplicate dates and sort
                 combined = combined[~combined.index.duplicated(keep='last')].sort_index()
                 combined.to_csv(file_path, compression='gzip')
                 return combined
