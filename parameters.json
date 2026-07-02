@@ -1,6 +1,6 @@
 {
   "features": {
-    "model_type": "lightgbm",
+    "model_type": "xgboost",
     "learning_rate": 0.04,
     "max_depth": 7,
     "num_leaves": 15,
@@ -13,12 +13,13 @@
     "top_n_symbols": 40
   },
   "training": {
-    "split_mode": "walk_forward_2024",
+    "split_mode": "walk_forward_2023",
     "fee": 0.0005,
     "allocation_cap": 0.1,
     "lag": 7,
     "quantiles": 40,
-    "trading_days_per_year": 365
+    "trading_days_per_year": 365,
+    "train_step_days": 7
   },
   "registration": {
     "tags": [
@@ -37,7 +38,8 @@
       "lag",
       "quantiles",
       "asset_class",
-      "universe_name"
+      "universe_name",
+      "train_step_days"
     ]
   }
 }

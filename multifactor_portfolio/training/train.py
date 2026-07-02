@@ -191,6 +191,14 @@ def generate_walk_forward_target_weights(
             lag=params.get('lag', 1)
         )
         
+        # Apply Step Sampling to training set if configured (to avoid serial autocorrelation)
+        train_step_days = params.get('train_step_days', 1)
+        if train_step_days > 1 and not panel_df.empty:
+            unique_dates = sorted(panel_df.index.get_level_values('Time').unique())
+            sampled_dates = unique_dates[::train_step_days]
+            panel_df = panel_df[panel_df.index.get_level_values('Time').isin(sampled_dates)]
+            print(f"Downsampled full-timeline panel from {len(unique_dates)} to {len(sampled_dates)} dates using step {train_step_days} days.")
+            
         X = panel_df[selected_features].fillna(0.0)
         y = panel_df['target']
         
@@ -289,6 +297,14 @@ def generate_walk_forward_target_weights(
             lag=params.get('lag', 1)
         )
         
+        # Apply Step Sampling to training set if configured (to avoid serial autocorrelation)
+        train_step_days = params.get('train_step_days', 1)
+        if train_step_days > 1 and not panel_train.empty:
+            unique_train_dates = sorted(panel_train.index.get_level_values('Time').unique())
+            sampled_train_dates = unique_train_dates[::train_step_days]
+            panel_train = panel_train[panel_train.index.get_level_values('Time').isin(sampled_train_dates)]
+            print(f"Downsampled training panel from {len(unique_train_dates)} to {len(sampled_train_dates)} dates using step {train_step_days} days.")
+            
         X_train = panel_train[selected_features].fillna(0.0)
         y_train = panel_train['target']
         

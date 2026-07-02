@@ -91,6 +91,14 @@ def run_feature_analysis():
         lag=all_params.get('lag', 1)
     )
     
+    # Apply Step Sampling to feature analysis if configured (to avoid serial autocorrelation)
+    train_step_days = all_params.get('train_step_days', 1)
+    if train_step_days > 1 and not panel_df.empty:
+        unique_dates = sorted(panel_df.index.get_level_values('Time').unique())
+        sampled_dates = unique_dates[::train_step_days]
+        panel_df = panel_df[panel_df.index.get_level_values('Time').isin(sampled_dates)]
+        print(f"Downsampled feature analysis dataset from {len(unique_dates)} to {len(sampled_dates)} dates using step {train_step_days} days.")
+        
     if panel_df.empty:
         print("Error: Generated panel dataset is empty.")
         return
