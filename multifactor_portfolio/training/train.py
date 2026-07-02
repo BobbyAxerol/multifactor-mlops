@@ -175,10 +175,15 @@ def generate_walk_forward_target_weights(
             start_date=start_date
         )
         
+        from multifactor_portfolio.util.macro_collector import download_macro_features
+        print("Downloading global macro features...")
+        macro_df = download_macro_features(local_data_dir, start_date=start_date)
+        
         panel_df = CrossSectionalFactorEngine.prepare_panel_dataset(
             data_dict=data_dict,
             funding_df=futures_data['funding'],
             symbols=target_symbols,
+            macro_df=macro_df,
             windows=windows,
             lag=params.get('lag', 1)
         )
@@ -207,6 +212,11 @@ def generate_walk_forward_target_weights(
         params_copy['split_mode'] = 'full'
         return generate_walk_forward_target_weights(data_dict, params_copy, local_data_dir, all_dates)
         
+    from multifactor_portfolio.util.macro_collector import download_macro_features
+    min_date = all_dates.min().strftime('%Y-%m-%d')
+    print("Downloading global macro features...")
+    global_macro_df = download_macro_features(local_data_dir, start_date=min_date)
+
     all_active_symbols = set()
     fold_weights_list = []
     last_bst = None
@@ -248,12 +258,15 @@ def generate_walk_forward_target_weights(
         )
         
         funding_fold = futures_data['funding'].loc[:test_end]
+        macro_fold = global_macro_df.loc[:test_end]
+        train_end = train_dict[next(iter(train_dict))].index.max()
         
         # 3. Prepare Train panel dataset
         panel_train = CrossSectionalFactorEngine.prepare_panel_dataset(
             data_dict=train_dict,
             funding_df=funding_fold,
             symbols=target_symbols,
+            macro_df=macro_fold.loc[:train_end],
             windows=windows,
             lag=params.get('lag', 1)
         )
@@ -272,6 +285,7 @@ def generate_walk_forward_target_weights(
             data_dict=test_dict_fold,
             funding_df=funding_fold,
             symbols=target_symbols,
+            macro_df=macro_fold,
             windows=windows,
             lag=params.get('lag', 1)
         )

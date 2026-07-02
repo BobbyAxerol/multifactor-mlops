@@ -546,19 +546,38 @@ class CrossSectionalFactorEngine:
         return features_df
 
     @classmethod
+    def generate_macro_features(cls, macro_df: pd.DataFrame, windows: List[int]) -> pd.DataFrame:
+        """
+        Tạo các Features vĩ mô đa khung thời gian từ DataFrame thô.
+        """
+        macro_features = {}
+        for col in macro_df.columns:
+            series = macro_df[col]
+            for w in windows:
+                macro_features[f'macro_{col}_mean_{w}'] = series.rolling(window=w, min_periods=min(3, w)).mean()
+                macro_features[f'macro_{col}_std_{w}'] = series.rolling(window=w, min_periods=min(3, w)).std()
+                if col in ['stablecoin_mcap', 'spy', 'dxy']:
+                    macro_features[f'macro_{col}_roc_{w}'] = (series / series.shift(w) - 1.0)
+        return pd.DataFrame(macro_features, index=macro_df.index).fillna(0.0)
+
+    @classmethod
     def prepare_panel_dataset(
         cls,
         data_dict: Dict[str, pd.DataFrame],
         funding_df: pd.DataFrame,
         symbols: List[str],
+        macro_df: pd.DataFrame,
         windows: List[int] = [7, 14, 30, 60, 90],
         lag: int = 1
     ) -> pd.DataFrame:
         """
-        Tạo Panel Dataset chứa features của tất cả active symbols và target forward return.
+        Tạo Panel Dataset chứa features của tất cả active symbols và target forward return (kèm features vĩ mô).
         """
+        macro_features_df = pd.DataFrame()
+        if not macro_df.empty:
+            macro_features_df = cls.generate_macro_features(macro_df, windows)
+            
         panel_list = []
-        
         funding_daily = pd.DataFrame()
         if not funding_df.empty:
             funding_daily = funding_df.resample('1D').last()
@@ -576,6 +595,10 @@ class CrossSectionalFactorEngine:
                 funding_series = pd.Series(0.0, index=kline_df.index)
                 
             features_df = cls.generate_features_for_symbol(kline_df, funding_series, windows)
+            
+            # Join macro features
+            if not macro_features_df.empty:
+                features_df = features_df.join(macro_features_df, how='left')
             
             close = kline_df['close']
             forward_return = (close.shift(-lag) / close - 1).rename('target')

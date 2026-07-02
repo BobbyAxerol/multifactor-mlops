@@ -162,7 +162,7 @@ def main():
         "fee": all_params.get("fee", 0.0005),
         "lag": all_params.get("lag", 1),
         "trading_days_per_year": all_params.get("trading_days_per_year", 365),
-        "split_mode": all_params.get("split_mode", "walk_forward_2022")
+        "split_mode": all_params.get("split_mode", "walk_forward_2024")
     }
     
     print("Starting Optuna optimization...")

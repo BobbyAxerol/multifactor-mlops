@@ -65,6 +65,24 @@ class MultifactorPortfolioModelWrapper(mlflow.pyfunc.PythonModel):
         if not funding_df.empty:
             funding_daily = funding_df.resample('1D').last()
             
+        # Download recent macro features for inference
+        import os
+        data_dir = os.environ.get("MACRO_DATA_DIR", "/tmp/macro_data")
+        
+        # Calculate recent date range (180 days history for rolling windows)
+        all_dates = pd.Index([])
+        for df in klines_dict.values():
+            all_dates = all_dates.union(df.index)
+        latest_time = pd.DatetimeIndex(sorted(all_dates)).max()
+        start_date = (latest_time - pd.Timedelta(days=180)).strftime('%Y-%m-%d')
+        
+        from multifactor_portfolio.util.macro_collector import download_macro_features
+        macro_df = download_macro_features(data_dir, start_date=start_date, end_date=latest_time.strftime('%Y-%m-%d'))
+        
+        macro_features_df = pd.DataFrame()
+        if not macro_df.empty:
+            macro_features_df = CrossSectionalFactorEngine.generate_macro_features(macro_df, windows=[7, 14, 30, 60, 90])
+            
         # 3. Generate features for active symbols
         symbol_dfs = []
         windows = [7, 14, 30, 60, 90]
@@ -83,6 +101,8 @@ class MultifactorPortfolioModelWrapper(mlflow.pyfunc.PythonModel):
                 
             # Get the features at the latest timestamp
             features_df = CrossSectionalFactorEngine.generate_features_for_symbol(kline_df, funding_series, windows)
+            if not macro_features_df.empty:
+                features_df = features_df.join(macro_features_df, how='left')
             latest_features = features_df.iloc[-1:].copy()
             latest_features['Symbol'] = symbol
             symbol_dfs.append(latest_features)

@@ -76,12 +76,17 @@ def run_feature_analysis():
     funding_df = futures_data['funding']
     
     # 6. Generate Panel Dataset
+    from multifactor_portfolio.util.macro_collector import download_macro_features
+    print("Downloading/Loading macro features...")
+    macro_df = download_macro_features(local_data_dir, start_date=start_date, end_date='2021-12-31')
+    
     windows = [7, 14, 30, 60, 90]
     print(f"Generating candidate features on windows: {windows}...")
     panel_df = CrossSectionalFactorEngine.prepare_panel_dataset(
         data_dict=train_dict,
         funding_df=funding_df,
         symbols=target_symbols,
+        macro_df=macro_df,
         windows=windows,
         lag=all_params.get('lag', 1)
     )
