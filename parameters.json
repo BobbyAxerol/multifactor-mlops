@@ -1,11 +1,11 @@
 {
   "features": {
     "model_type": "lightgbm",
-    "learning_rate": 0.05,
-    "max_depth": 4,
+    "learning_rate": 0.04,
+    "max_depth": 7,
     "num_leaves": 15,
-    "num_boost_round": 100,
-    "colsample_bytree": 0.3
+    "num_boost_round": 230,
+    "colsample_bytree": 0.6
   },
   "dataset": {
     "asset_class": "crypto",
@@ -15,9 +15,9 @@
   "training": {
     "split_mode": "walk_forward_2024",
     "fee": 0.0005,
-    "allocation_cap": 0.2,
+    "allocation_cap": 0.1,
     "lag": 7,
-    "quantiles": 10,
+    "quantiles": 40,
     "trading_days_per_year": 365
   },
   "registration": {

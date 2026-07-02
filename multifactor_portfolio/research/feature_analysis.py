@@ -185,13 +185,14 @@ def run_feature_analysis():
     print(f"Selected Features: {len(selected_features)}")
     print("====================================================")
     
-    # Save selected features to JSON
+    # Save selected features to JSON (Only save asset-specific features for return prediction)
+    asset_selected_features = [f for f in selected_features if not f.startswith('macro_')]
     research_dir = os.path.join(project_root, "multifactor_portfolio", "research")
     os.makedirs(research_dir, exist_ok=True)
     selected_path = os.path.join(research_dir, "selected_features.json")
     with open(selected_path, "w") as f:
-        json.dump(selected_features, f, indent=2)
-    print(f"Selected feature list saved to: {selected_path}")
+        json.dump(asset_selected_features, f, indent=2)
+    print(f"Selected asset feature list saved to: {selected_path} ({len(asset_selected_features)} features)")
     
 if __name__ == "__main__":
     run_feature_analysis()

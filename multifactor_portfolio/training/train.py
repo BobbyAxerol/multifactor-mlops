@@ -385,6 +385,32 @@ def run_strategy_backtest(
     )
     
     portfolio_weights = target_weights_df.mul(risk_weights, axis="columns")
+    
+    # Apply Macro-Regime Risk Overlay
+    try:
+        from multifactor_portfolio.util.macro_collector import download_macro_features
+        print("Applying Macro-Regime Risk Overlay...")
+        start_dt_str = eval_dates.min().strftime('%Y-%m-%d')
+        end_dt_str = eval_dates.max().strftime('%Y-%m-%d')
+        macro_df = download_macro_features(local_data_dir, start_date=start_dt_str, end_date=end_dt_str)
+        if not macro_df.empty:
+            macro_df = macro_df.reindex(portfolio_weights.index).ffill().bfill()
+            
+            vix_ma = macro_df['vix'].rolling(14, min_periods=1).mean()
+            fng_ma = macro_df['fear_greed'].rolling(14, min_periods=1).mean()
+            dvol_ma = macro_df['dvol_btc'].rolling(14, min_periods=1).mean()
+            
+            stress_flag = (vix_ma > 22.0) | (fng_ma < 30.0) | (dvol_ma > 65.0)
+            
+            stress_multiplier = params.get('stress_multiplier', 0.5)
+            regime_multiplier = pd.Series(1.0, index=portfolio_weights.index)
+            regime_multiplier[stress_flag.fillna(False)] = stress_multiplier
+            
+            portfolio_weights = portfolio_weights.mul(regime_multiplier, axis=0)
+            print(f"Applied stress multiplier {stress_multiplier} on {stress_flag.sum()} out of {len(portfolio_weights)} trading days.")
+    except Exception as e:
+        print(f"Warning: Failed to apply Macro-Regime Risk Overlay: {e}")
+        
     allocation_cap = params.get('allocation_cap', 0.2)
     portfolio_weights = portfolio_weights.clip(lower=-allocation_cap, upper=allocation_cap)
     
