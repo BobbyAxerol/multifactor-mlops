@@ -146,7 +146,7 @@ class MultifactorPortfolioModelWrapper(mlflow.pyfunc.PythonModel):
         risk_weights = calculate_inverse_volatility_weighting(
             underlying=underlying_returns, 
             weights=final_weights_df, 
-            period=120
+            period=self.params.get('inverse_vol_period', 120)
         )
         
         portfolio_weights = final_weights_df.mul(risk_weights, axis="columns")
@@ -159,7 +159,11 @@ class MultifactorPortfolioModelWrapper(mlflow.pyfunc.PythonModel):
                 fng_ma = macro_df_aligned['fear_greed'].rolling(14, min_periods=1).mean()
                 dvol_ma = macro_df_aligned['dvol_btc'].rolling(14, min_periods=1).mean()
                 
-                stress_flag = (vix_ma > 22.0) | (fng_ma < 30.0) | (dvol_ma > 65.0)
+                vix_threshold = self.params.get('stress_vix_threshold', 22.0)
+                fng_threshold = self.params.get('stress_fng_threshold', 30.0)
+                dvol_threshold = self.params.get('stress_dvol_threshold', 65.0)
+                
+                stress_flag = (vix_ma > vix_threshold) | (fng_ma < fng_threshold) | (dvol_ma > dvol_threshold)
                 
                 stress_multiplier = self.params.get('stress_multiplier', 0.5)
                 regime_multiplier = pd.Series(1.0, index=portfolio_weights.index)

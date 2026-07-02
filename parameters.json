@@ -16,10 +16,15 @@
     "split_mode": "walk_forward_2023",
     "fee": 0.0005,
     "allocation_cap": 0.1,
-    "lag": 7,
+    "lag": 1,
     "quantiles": 40,
     "trading_days_per_year": 365,
-    "train_step_days": 7
+    "train_step_days": 1,
+    "inverse_vol_period": 120,
+    "stress_vix_threshold": 22.0,
+    "stress_fng_threshold": 30.0,
+    "stress_dvol_threshold": 65.0,
+    "stress_multiplier": 0.5
   },
   "registration": {
     "tags": [
@@ -39,7 +44,12 @@
       "quantiles",
       "asset_class",
       "universe_name",
-      "train_step_days"
+      "train_step_days",
+      "inverse_vol_period",
+      "stress_vix_threshold",
+      "stress_fng_threshold",
+      "stress_dvol_threshold",
+      "stress_multiplier"
     ]
   }
 }
