@@ -1,8 +1,11 @@
 {
   "features": {
-    "learning_rate": 0.02,
-    "max_depth": 3,
-    "num_boost_round": 80
+    "model_type": "lightgbm",
+    "learning_rate": 0.05,
+    "max_depth": 4,
+    "num_leaves": 15,
+    "num_boost_round": 100,
+    "colsample_bytree": 0.3
   },
   "dataset": {
     "asset_class": "crypto",
@@ -22,9 +25,12 @@
       "sharpe_ratio",
       "cagr",
       "max_drawdown",
+      "model_type",
       "learning_rate",
       "max_depth",
+      "num_leaves",
       "num_boost_round",
+      "colsample_bytree",
       "top_n_symbols",
       "fee",
       "allocation_cap",

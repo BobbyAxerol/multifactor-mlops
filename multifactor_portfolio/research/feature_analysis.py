@@ -136,6 +136,7 @@ def run_feature_analysis():
         'objective': 'reg:squarederror',
         'learning_rate': 0.05,
         'max_depth': 4,
+        'colsample_bytree': 0.3,
         'verbosity': 0
     }
     bst = xgb.train(xgb_params, dtrain, num_boost_round=100)

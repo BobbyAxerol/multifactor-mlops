@@ -572,6 +572,7 @@ class CrossSectionalFactorEngine:
     ) -> pd.DataFrame:
         """
         Tạo Panel Dataset chứa features của tất cả active symbols và target forward return (kèm features vĩ mô).
+        Thực hiện Target Demeanization và Cross-Sectional Percentile Ranking trên các đặc trưng riêng của coin.
         """
         macro_features_df = pd.DataFrame()
         if not macro_df.empty:
@@ -582,6 +583,10 @@ class CrossSectionalFactorEngine:
         if not funding_df.empty:
             funding_daily = funding_df.resample('1D').last()
             
+        # Xác định các cột đặc trưng riêng của coin
+        sample_symbol = symbols[0] if symbols else None
+        asset_feature_names = []
+        
         for symbol in symbols:
             if symbol not in data_dict:
                 continue
@@ -595,6 +600,8 @@ class CrossSectionalFactorEngine:
                 funding_series = pd.Series(0.0, index=kline_df.index)
                 
             features_df = cls.generate_features_for_symbol(kline_df, funding_series, windows)
+            if not asset_feature_names:
+                asset_feature_names = list(features_df.columns)
             
             # Join macro features
             if not macro_features_df.empty:
@@ -615,4 +622,18 @@ class CrossSectionalFactorEngine:
         panel_df = pd.concat(panel_list)
         panel_df.index.name = 'Time'
         panel_df = panel_df.reset_index().set_index(['Time', 'Symbol']).sort_index()
+        
+        # 1. Cross-Sectional Percentile Ranking cho các đặc trưng riêng của coin
+        if asset_feature_names:
+            panel_df[asset_feature_names] = (
+                panel_df[asset_feature_names]
+                .groupby(level='Time')
+                .rank(pct=True)
+                .fillna(0.5)  # Trả về phân vị trung vị nếu thiếu
+            )
+            
+        # 2. Target Demeanization: Lợi nhuận vượt trội so với trung bình thị trường cùng thời điểm
+        target_mean = panel_df['target'].groupby(level='Time').transform('mean')
+        panel_df['target'] = panel_df['target'] - target_mean
+        
         return panel_df

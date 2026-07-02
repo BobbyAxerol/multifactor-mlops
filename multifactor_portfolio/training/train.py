@@ -153,6 +153,7 @@ def generate_walk_forward_target_weights(
         'objective': 'reg:squarederror',
         'learning_rate': params.get('learning_rate', 0.05),
         'max_depth': int(params.get('max_depth', 4)),
+        'colsample_bytree': params.get('colsample_bytree', 0.3),
         'verbosity': 0
     }
     num_boost_round = int(params.get('num_boost_round', 100))
@@ -203,6 +204,7 @@ def generate_walk_forward_target_weights(
                 'learning_rate': params.get('learning_rate', 0.05),
                 'max_depth': int(params.get('max_depth', 4)),
                 'num_leaves': int(params.get('num_leaves', 15)),
+                'feature_fraction': params.get('colsample_bytree', 0.3),
                 'verbosity': -1
             }
             bst = lgb.train(lgb_params, dtrain, num_boost_round=num_boost_round)
@@ -300,6 +302,7 @@ def generate_walk_forward_target_weights(
                 'learning_rate': params.get('learning_rate', 0.05),
                 'max_depth': int(params.get('max_depth', 4)),
                 'num_leaves': int(params.get('num_leaves', 15)),
+                'feature_fraction': params.get('colsample_bytree', 0.3),
                 'verbosity': -1
             }
             bst = lgb.train(lgb_params, dtrain, num_boost_round=num_boost_round)

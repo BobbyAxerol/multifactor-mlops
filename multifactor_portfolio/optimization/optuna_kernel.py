@@ -151,6 +151,7 @@ def main():
         "learning_rate": (0.01, 0.20, 0.01),
         "max_depth": (3, 8, 1),
         "num_boost_round": (50, 300, 10),
+        "colsample_bytree": (0.1, 0.6, 0.1),
         "quantiles": (10, 40, 5),
         "allocation_cap": (0.05, 0.40, 0.05)
     }
