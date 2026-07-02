@@ -147,6 +147,8 @@ def generate_walk_forward_target_weights(
         for w in windows:
             selected_features.extend([f'mom_rsi_{w}', f'mom_wma_dist_{w}', f'retail_flow_{w}', f'carry_{w}', f'margin_risk_{w}'])
 
+    model_type = params.get('model_type', 'xgboost')
+    
     xgb_hyperparams = {
         'objective': 'reg:squarederror',
         'learning_rate': params.get('learning_rate', 0.05),
@@ -191,11 +193,25 @@ def generate_walk_forward_target_weights(
         X = panel_df[selected_features].fillna(0.0)
         y = panel_df['target']
         
-        print("Training full-timeline XGBoost model...")
-        dtrain = xgb.DMatrix(X, label=y)
-        bst = xgb.train(xgb_hyperparams, dtrain, num_boost_round=num_boost_round)
-        
-        preds = bst.predict(dtrain)
+        print(f"Training full-timeline {model_type} model...")
+        if model_type == 'lightgbm':
+            import lightgbm as lgb
+            dtrain = lgb.Dataset(X, label=y)
+            lgb_params = {
+                'objective': 'regression',
+                'metric': 'rmse',
+                'learning_rate': params.get('learning_rate', 0.05),
+                'max_depth': int(params.get('max_depth', 4)),
+                'num_leaves': int(params.get('num_leaves', 15)),
+                'verbosity': -1
+            }
+            bst = lgb.train(lgb_params, dtrain, num_boost_round=num_boost_round)
+            preds = bst.predict(X)
+        else:
+            dtrain = xgb.DMatrix(X, label=y)
+            bst = xgb.train(xgb_hyperparams, dtrain, num_boost_round=num_boost_round)
+            preds = bst.predict(dtrain)
+            
         predicted_returns_df = pd.Series(preds, index=panel_df.index).unstack(level='Symbol').fillna(0.0)
         
         engine_bin = CrossSectionalFactorEngine(symbols=target_symbols, quantiles=params.get('quantiles', 20))
@@ -274,9 +290,22 @@ def generate_walk_forward_target_weights(
         X_train = panel_train[selected_features].fillna(0.0)
         y_train = panel_train['target']
         
-        # Train XGBoost
-        dtrain = xgb.DMatrix(X_train, label=y_train)
-        bst = xgb.train(xgb_hyperparams, dtrain, num_boost_round=num_boost_round)
+        # Train
+        if model_type == 'lightgbm':
+            import lightgbm as lgb
+            dtrain = lgb.Dataset(X_train, label=y_train)
+            lgb_params = {
+                'objective': 'regression',
+                'metric': 'rmse',
+                'learning_rate': params.get('learning_rate', 0.05),
+                'max_depth': int(params.get('max_depth', 4)),
+                'num_leaves': int(params.get('num_leaves', 15)),
+                'verbosity': -1
+            }
+            bst = lgb.train(lgb_params, dtrain, num_boost_round=num_boost_round)
+        else:
+            dtrain = xgb.DMatrix(X_train, label=y_train)
+            bst = xgb.train(xgb_hyperparams, dtrain, num_boost_round=num_boost_round)
         last_bst = bst
         
         # 4. Prepare Test panel dataset (OOS dates)
@@ -299,8 +328,11 @@ def generate_walk_forward_target_weights(
         X_test = panel_test[selected_features].fillna(0.0)
         
         # Predict
-        dtest = xgb.DMatrix(X_test)
-        preds = bst.predict(dtest)
+        if model_type == 'lightgbm':
+            preds = bst.predict(X_test)
+        else:
+            dtest = xgb.DMatrix(X_test)
+            preds = bst.predict(dtest)
         
         # Unstack predictions
         predicted_returns_df = pd.Series(preds, index=panel_test.index).unstack(level='Symbol').fillna(0.0)

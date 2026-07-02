@@ -9,19 +9,24 @@ load_dotenv()
 class MultifactorPortfolioModelWrapper(mlflow.pyfunc.PythonModel):
     def load_context(self, context):
         """
-        Loads the serialized model/parameter bundle and XGBoost booster.
+        Loads the serialized model/parameter bundle and booster.
         """
         import joblib
-        import xgboost as xgb
         import json
         
         self.model_bundle = joblib.load(context.artifacts["model_bundle"])
         self.params = self.model_bundle["params"]
         self.symbols = self.model_bundle["symbols"]
         
-        # Load XGBoost model booster
-        self.bst = xgb.Booster()
-        self.bst.load_model(context.artifacts["model_xgb"])
+        # Load model booster based on model_type
+        model_type = self.params.get('model_type', 'xgboost')
+        if model_type == 'lightgbm':
+            import lightgbm as lgb
+            self.bst = lgb.Booster(model_file=context.artifacts["model_lgb"])
+        else:
+            import xgboost as xgb
+            self.bst = xgb.Booster()
+            self.bst.load_model(context.artifacts["model_xgb"])
         
         # Load selected features list
         with open(context.artifacts["selected_features"]) as f:
@@ -117,9 +122,13 @@ class MultifactorPortfolioModelWrapper(mlflow.pyfunc.PythonModel):
         # Select features
         X_test = test_panel[self.selected_features].fillna(0.0)
         
-        # Predict expected returns using XGBoost
-        dtest = xgb.DMatrix(X_test)
-        preds = self.bst.predict(dtest)
+        # Predict expected returns
+        model_type = self.params.get('model_type', 'xgboost')
+        if model_type == 'lightgbm':
+            preds = self.bst.predict(X_test)
+        else:
+            dtest = xgb.DMatrix(X_test)
+            preds = self.bst.predict(dtest)
         
         # Unstack predictions
         predicted_returns_df = pd.Series(preds, index=test_panel.index).unstack(level='Symbol').fillna(0.0)

@@ -121,30 +121,35 @@ def main():
         }  
         joblib.dump(model_bundle, "model_bundle.joblib")  
         
-        # Save XGBoost model booster to JSON
-        if bst is not None:
-            bst.save_model("model.json")
+        # Save model booster based on model_type
+        model_type = all_params.get('model_type', 'xgboost')
+        
+        model_artifacts = {
+            "model_bundle": "model_bundle.joblib",
+            "selected_features": selected_path
+        }
+        
+        if model_type == 'lightgbm':
+            if bst is not None:
+                bst.save_model("model.txt")
+            else:
+                import lightgbm as lgb
+                dummy_bst = lgb.train({'objective': 'regression', 'verbosity': -1}, lgb.Dataset(np.zeros((2,2)), label=np.zeros(2)), num_boost_round=1)
+                dummy_bst.save_model("model.txt")
+            model_artifacts["model_lgb"] = "model.txt"
         else:
-            # Fallback if no model was trained
-            dummy_bst = xgb.train({'objective': 'reg:squarederror'}, xgb.DMatrix(np.zeros((2,2)), label=np.zeros(2)), num_boost_round=1)
-            dummy_bst.save_model("model.json")
+            if bst is not None:
+                bst.save_model("model.json")
+            else:
+                dummy_bst = xgb.train({'objective': 'reg:squarederror'}, xgb.DMatrix(np.zeros((2,2)), label=np.zeros(2)), num_boost_round=1)
+                dummy_bst.save_model("model.json")
+            model_artifacts["model_xgb"] = "model.json"
             
-        selected_path = os.path.join(project_root, "multifactor_portfolio", "research", "selected_features.json")
-        if not os.path.exists(selected_path):
-            # Create a fallback empty list if not analyzed yet
-            os.makedirs(os.path.dirname(selected_path), exist_ok=True)
-            with open(selected_path, "w") as sf:
-                json.dump([], sf)
-          
         # Log Python PyFunc Model
         mlflow.pyfunc.log_model(  
             artifact_path="model",  
             python_model=MultifactorPortfolioModelWrapper(),  
-            artifacts={
-                "model_bundle": "model_bundle.joblib",
-                "model_xgb": "model.json",
-                "selected_features": selected_path
-            },
+            artifacts=model_artifacts,
             code_paths=[os.path.join(project_root, "multifactor_portfolio")]
         )  
   
