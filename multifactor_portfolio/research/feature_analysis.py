@@ -176,17 +176,30 @@ def run_feature_analysis():
     report_df['xgb_sort'] = [xgb_gain_pct[f] for f in report_df['Feature']]
     report_df = report_df.sort_values(by='xgb_sort', ascending=False).drop(columns=['xgb_sort'])
     
-    print("\n====================================================")
-    print("              FEATURE SELECTION REPORT              ")
-    print("====================================================")
-    print(report_df.to_string(index=False))
-    print("====================================================")
-    print(f"Total Candidate Features: {len(feature_names)}")
-    print(f"Selected Features: {len(selected_features)}")
-    print("====================================================")
+    asset_report = report_df[~report_df['Feature'].str.startswith('macro_')]
+    macro_report = report_df[report_df['Feature'].str.startswith('macro_')]
+    
+    print("\n====================================================================================")
+    print("                    1. ASSET ALPHA FEATURES (Used for Model Training)                ")
+    print("====================================================================================")
+    print(asset_report.to_string(index=False))
+    print("====================================================================================")
+    
+    print("\n====================================================================================")
+    print("                    2. GLOBAL MACRO FEATURES (Used for Regime Risk Overlay)          ")
+    print("====================================================================================")
+    print(macro_report.to_string(index=False))
+    print("====================================================================================")
     
     # Save selected features to JSON (Only save asset-specific features for return prediction)
     asset_selected_features = [f for f in selected_features if not f.startswith('macro_')]
+    macro_selected_features = [f for f in selected_features if f.startswith('macro_')]
+    
+    print(f"Total Candidate Features (Mixed): {len(feature_names)}")
+    print(f"Total Asset Features Kept (For Training): {len(asset_selected_features)}")
+    print(f"Total Macro Features Kept (For Regime Overlay): {len(macro_selected_features)}")
+    print("====================================================================================")
+    
     research_dir = os.path.join(project_root, "multifactor_portfolio", "research")
     os.makedirs(research_dir, exist_ok=True)
     selected_path = os.path.join(research_dir, "selected_features.json")
