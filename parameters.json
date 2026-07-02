@@ -1,8 +1,8 @@
 {
   "features": {
-    "learning_rate": 0.05,
-    "max_depth": 4,
-    "num_boost_round": 100
+    "learning_rate": 0.02,
+    "max_depth": 3,
+    "num_boost_round": 80
   },
   "dataset": {
     "asset_class": "crypto",
@@ -10,11 +10,11 @@
     "top_n_symbols": 40
   },
   "training": {
-    "split_mode": "walk_forward_2022",
+    "split_mode": "walk_forward_2024",
     "fee": 0.0005,
     "allocation_cap": 0.2,
-    "lag": 1,
-    "quantiles": 20,
+    "lag": 7,
+    "quantiles": 10,
     "trading_days_per_year": 365
   },
   "registration": {

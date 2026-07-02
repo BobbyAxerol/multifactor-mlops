@@ -79,8 +79,12 @@ def split_data(
         
     folds = []
     
-    if split_mode == 'walk_forward_2022':
-        years = sorted([y for y in all_dates.year.unique() if y >= 2022])
+    if split_mode.startswith('walk_forward_') and not split_mode.endswith('yearly') and not split_mode.endswith('quarterly'):
+        try:
+            start_year = int(split_mode.split('_')[-1])
+        except ValueError:
+            start_year = 2022
+        years = sorted([y for y in all_dates.year.unique() if y >= start_year])
         for y in years:
             test_dates = all_dates[all_dates.year == y]
             if not test_dates.empty:
