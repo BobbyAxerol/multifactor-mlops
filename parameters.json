@@ -1,11 +1,11 @@
 {
   "features": {
     "model_type": "xgboost",
-    "learning_rate": 0.02,
-    "max_depth": 3,
+    "learning_rate": 0.04,
+    "max_depth": 4,
     "num_leaves": 15,
-    "num_boost_round": 80,
-    "colsample_bytree": 0.3
+    "num_boost_round": 100,
+    "colsample_bytree": 0.4
   },
   "dataset": {
     "asset_class": "crypto",
@@ -22,10 +22,10 @@
     "fee": 0.0005,
     "slippage": 0.0001,
     "lag": 1,
-    "quantiles": 40,
+    "quantiles": 20,
     "trading_days_per_year": 365,
     "train_step_days": 1,
-    "inverse_vol_period": 120,
+    "inverse_vol_period": 60,
     "stress_vix_threshold": 22.0,
     "stress_fng_threshold": 30.0,
     "stress_dvol_threshold": 65.0,
