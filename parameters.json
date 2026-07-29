@@ -40,7 +40,7 @@
     "start_year": 2024,
     "n_trials": 50,
     "optuna_early_stopping": 50,
-    "optimization_mode": "mode_4_is_only_robust",
+    "optimization_mode": "mode_5_full_robust",
     "random_seed": 42,
     "_available_split_modes": [
       "train_test_split_2024",
@@ -56,7 +56,7 @@
     ]
   },
   "mode_4_is_only_robust": {
-    "active": true,
+    "active": false,
     "scoring_backend": "endpoint",
     "scoring_trading_days": 365,
     "candidate_selection_metric": "is_only_robust",
@@ -71,7 +71,7 @@
     "flat_selector": "medoid"
   },
   "mode_5_full_robust": {
-    "active": false,
+    "active": true,
     "candidate_selection_metric": "full_robust",
     "top_is_fraction": 0.1,
     "is_subperiods": 8,

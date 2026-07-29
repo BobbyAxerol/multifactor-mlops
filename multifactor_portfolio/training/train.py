@@ -441,7 +441,8 @@ def run_strategy_backtest(
             sys.path.append('/root/bobby/pool_alpha')
             from quantbt.endpoint import QuantBTEndpoint
             
-            scaled_weights = portfolio_weights.copy()
+            # Anti-Look-Ahead Bias: Enforce 1-bar execution lag
+            scaled_weights = portfolio_weights.shift(1).fillna(0.0)
             if float(scaled_weights.abs().sum(axis=1).max()) >= 0.999:
                 scaled_weights = scaled_weights * 0.99
                 
@@ -485,12 +486,19 @@ def run_strategy_backtest(
             lag=params.get('lag', 1)
         )
     
-    portfolio_equity = (1.0 + backtest_result.portfolio_returns).cumprod()
+    # Filter returns strictly to eval_dates to eliminate pre-evaluation zero padding
+    p_returns = backtest_result.portfolio_returns.copy()
+    if p_returns.index.tz is not None:
+        p_returns.index = p_returns.index.tz_localize(None)
+        
+    clean_eval_dates = eval_dates.tz_localize(None) if eval_dates.tz is not None else eval_dates
+    eval_returns = p_returns.reindex(clean_eval_dates).fillna(0.0)
+    portfolio_equity = (1.0 + eval_returns).cumprod()
     
     equity_df = pd.DataFrame({
-        'time': backtest_result.portfolio_returns.index,
+        'time': clean_eval_dates,
         'equity': portfolio_equity.values,
-        'return': backtest_result.portfolio_returns.values
+        'return': eval_returns.values
     }).reset_index(drop=True)
     
     metrics = calculate_performance_metrics(

@@ -3,7 +3,7 @@ import pandas as pd
 
 def calculate_performance_metrics(equity_df: pd.DataFrame, trading_days_per_year: float = 365.0) -> dict:
     """
-    Computes performance metrics (Sharpe ratio, CAGR, max drawdown).
+    Computes performance metrics (Sharpe ratio, CAGR, max drawdown) correctly.
     """
     if equity_df.empty or len(equity_df) < 2:
         return {
@@ -17,13 +17,20 @@ def calculate_performance_metrics(equity_df: pd.DataFrame, trading_days_per_year
     
     # Calculate years based on actual timeline
     total_days = (equity_df['time'].iloc[-1] - equity_df['time'].iloc[0]).days
-    years = total_days / 365.25 if total_days > 0 else 0.0
+    years = total_days / trading_days_per_year if total_days > 0 else 0.0
     
-    cagr = (final_val / initial_val) ** (1.0 / years) - 1.0 if years > 0 and final_val > 0 else 0.0
+    cagr = (final_val / initial_val) ** (1.0 / years) - 1.0 if (years > 0 and initial_val > 0 and final_val > 0) else 0.0
     
-    daily_returns = equity_df['return']
-    ann_vol = daily_returns.std() * np.sqrt(trading_days_per_year)
-    sharpe = cagr / ann_vol if ann_vol > 0 else 0.0
+    daily_returns = equity_df['return'].fillna(0.0)
+    
+    # Standard Annualized Sharpe Ratio calculation (Mean Return / Std Dev * sqrt(N))
+    mean_ret = daily_returns.mean()
+    std_ret = daily_returns.std()
+    
+    if std_ret > 1e-8:
+        sharpe = (mean_ret / std_ret) * np.sqrt(trading_days_per_year)
+    else:
+        sharpe = 0.0
     
     cum_max = equity_df['equity'].cummax()
     drawdowns = (equity_df['equity'] / cum_max) - 1.0

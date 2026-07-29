@@ -108,11 +108,13 @@ def optimize_parameters(
                     local_data_dir=local_data_dir
                 )
             
-            # Mode 4 is_only_robust: Sub-period temporal scoring
-            if params.get('optimization_mode') == 'mode_4_is_only_robust' or params.get('mode_4_is_only_robust', {}).get('active'):
+            opt_mode = params.get('optimization_mode', 'mode_5_full_robust')
+            # Mode 4 & Mode 5 Robustness scoring: Sub-period temporal scoring
+            if opt_mode in ['mode_4_is_only_robust', 'mode_5_full_robust'] or params.get('mode_5_full_robust', {}).get('active'):
                 rets = equity_df['return'].values
+                n_chunks = 8 if opt_mode == 'mode_5_full_robust' else 6
                 if len(rets) > 60:
-                    chunks = np.array_split(rets, 6)
+                    chunks = np.array_split(rets, n_chunks)
                     sub_sharpes = []
                     for chunk in chunks:
                         if len(chunk) > 10 and np.std(chunk) > 1e-8:
@@ -120,7 +122,7 @@ def optimize_parameters(
                         else:
                             s = -1.0
                         sub_sharpes.append(s)
-                    dispersion_penalty = params.get('mode_4_is_only_robust', {}).get('dispersion_penalty', 0.5)
+                    dispersion_penalty = 0.5
                     robust_score = np.mean(sub_sharpes) - dispersion_penalty * np.std(sub_sharpes)
                     return float(robust_score)
             
