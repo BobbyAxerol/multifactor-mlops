@@ -167,11 +167,12 @@ def main():
     }
     
     print("Starting Optuna optimization...")
+    n_trials = pars.get('optimization', {}).get('n_trials', 20)
     best_params, best_sharpe = optimize_parameters(
         raw_dict=raw_dict,
         param_ranges=param_ranges,
         strategy_name="multifactor_portfolio",
-        n_trials=50,
+        n_trials=n_trials,
         fixed_params=fixed,
         use_fixed_params=True
     )

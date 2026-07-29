@@ -10,7 +10,9 @@
   "dataset": {
     "asset_class": "crypto",
     "universe_name": "binance_daily",
-    "top_n_symbols": 40
+    "top_n_symbols": 40,
+    "data_repo_path": "/root/bobby/pool_alpha/alphas_storage/_get_data",
+    "quantbt_repo_path": "/root/bobby/pool_alpha/quantbt"
   },
   "training": {
     "split_mode": "walk_forward_2023",
@@ -24,7 +26,40 @@
     "stress_vix_threshold": 22.0,
     "stress_fng_threshold": 30.0,
     "stress_dvol_threshold": 65.0,
-    "stress_multiplier": 0.5
+    "stress_multiplier": 0.5,
+    "backend": "native_portfolio"
+  },
+  "optimization": {
+    "split_mode": "walk_forward_2023",
+    "split_frequency": "single",
+    "start_year": 2023,
+    "n_trials": 20,
+    "optuna_early_stopping": 50,
+    "optimization_mode": "mode_5_full_robust",
+    "random_seed": 42,
+    "_available_split_modes": [
+      "walk_forward_2023",
+      "walk_forward_2024"
+    ],
+    "_available_optimization_modes": [
+      "mode_1_decay",
+      "mode_2_sbb",
+      "mode_3_flat_minima",
+      "mode_4_is_only_robust",
+      "mode_5_full_robust"
+    ]
+  },
+  "mode_5_full_robust": {
+    "active": true,
+    "candidate_selection_metric": "full_robust",
+    "top_is_fraction": 0.1,
+    "is_subperiods": 8,
+    "flat_eps": 0.12,
+    "flat_min_samples": 5,
+    "temporal_weight": 0.65,
+    "plateau_weight": 0.35,
+    "scoring_backend": "endpoint",
+    "scoring_trading_days": 365
   },
   "registration": {
     "tags": [
