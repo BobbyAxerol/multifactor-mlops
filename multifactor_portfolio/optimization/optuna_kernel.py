@@ -182,9 +182,13 @@ def main():
         "universe_name": all_params.get("universe_name", "binance_daily"),
         "top_n_symbols": all_params.get("top_n_symbols", 40),
         "fee": all_params.get("fee", 0.0005),
+        "slippage": all_params.get("slippage", 0.0001),
+        "leverage": all_params.get("leverage", 3.0),
         "lag": all_params.get("lag", 1),
         "trading_days_per_year": all_params.get("trading_days_per_year", 365),
-        "split_mode": all_params.get("split_mode", "walk_forward_2024")
+        "split_mode": all_params.get("split_mode", "train_test_split_2024"),
+        "scoring_backend": "endpoint",
+        "optimization_mode": "mode_4_is_only_robust"
     }
     
     print("Starting Optuna optimization...")
