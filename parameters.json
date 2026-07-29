@@ -16,8 +16,11 @@
   },
   "training": {
     "split_mode": "train_test_split_2024",
+    "initial_capital": 100000.0,
+    "leverage": 3.0,
+    "allocation_cap": 0.25,
     "fee": 0.0005,
-    "allocation_cap": 0.1,
+    "slippage": 0.0001,
     "lag": 1,
     "quantiles": 40,
     "trading_days_per_year": 365,
@@ -27,7 +30,9 @@
     "stress_fng_threshold": 30.0,
     "stress_dvol_threshold": 65.0,
     "stress_multiplier": 0.5,
-    "backend": "native_portfolio"
+    "backend": "native_portfolio",
+    "portfolio_mode": "longshort",
+    "hedge_type": "target_weight"
   },
   "optimization": {
     "split_mode": "train_test_split_2024",
@@ -90,6 +95,8 @@
       "colsample_bytree",
       "top_n_symbols",
       "fee",
+      "slippage",
+      "leverage",
       "allocation_cap",
       "lag",
       "quantiles",

@@ -449,14 +449,15 @@ def run_strategy_backtest(
                 scaled_weights = scaled_weights * 0.99
                 
             bt_engine = QuantBTEndpoint.portfolio(
-                portfolio_mode="longshort",
-                backend="native_portfolio",
-                hedge_type="target_weight",
+                portfolio_mode=params.get('portfolio_mode', 'longshort'),
+                backend=params.get('backend', 'native_portfolio'),
+                hedge_type=params.get('hedge_type', 'target_weight'),
                 initial_capital=params.get('initial_capital', 100000.0),
-                leverage=1.0,
-                asset_type="crypto",
-                use_funding=False,
+                leverage=params.get('leverage', 1.0),
+                asset_type=params.get('asset_class', 'crypto'),
+                use_funding=params.get('use_funding', False),
                 fee=params.get('fee', 0.0005) * 2.0,
+                slippage=params.get('slippage', 0.0001),
                 contract_size=1.0,
                 report_level="minimal"
             )
