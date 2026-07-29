@@ -187,29 +187,17 @@ class CrossSectionalFactorEngine:
         """
         factor_data = factor_data.replace([np.inf, -np.inf], np.nan)
         
-        def safe_qcut(series, quantiles):
-            clean_series = series.dropna()
-            if len(clean_series.unique()) < quantiles:
-                return pd.Series(np.nan, index=series.index)
-            try:
-                return pd.qcut(clean_series, q=quantiles, labels=False, duplicates='drop')
-            except ValueError:
-                return pd.Series(np.nan, index=series.index)
+        # PA 2.1: Tie-Breaking Percentile Ranking (rank pct=True, method='first')
+        rank_pct = factor_data.rank(axis=1, pct=True, method='first')
         
-        factors_binned = factor_data.apply(
-            lambda x: safe_qcut(x, self.quantiles),
-            axis=1
-        )
+        top_pct = 1.0 / max(float(self.quantiles), 2.0)
+        long_mask = rank_pct > (1.0 - top_pct)
+        short_mask = rank_pct <= top_pct
         
-        max_bin_value = self.quantiles - 1
-        weights = factors_binned.div(max_bin_value, axis="index")
-        weights = weights.mul(2).sub(1)
-        
-        weights_abs_sum = weights.abs().sum(axis="columns")
-        valid_days = weights_abs_sum[weights_abs_sum > 1e-6].index
-
         final_weights = pd.DataFrame(0.0, index=factor_data.index, columns=factor_data.columns)
-        final_weights.loc[valid_days] = weights.loc[valid_days].div(weights_abs_sum.loc[valid_days], axis="index")
+        final_weights[long_mask] = 1.0
+        final_weights[short_mask] = -1.0
+        
         return final_weights.fillna(0.0)
 
     def ensemble_and_final_bin(self) -> pd.DataFrame:

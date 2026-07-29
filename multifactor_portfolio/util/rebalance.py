@@ -59,24 +59,25 @@ def calculate_inverse_volatility_weighting(
     underlying: pd.DataFrame, weights: pd.DataFrame, period: int
 ) -> pd.DataFrame:
     """
-    Calculate Inverse Volatility Weights based on daily returns std.
+    Calculate Side-Normalized Inverse Volatility Weights (+0.50 Long, -0.50 Short).
     """
-    # 1. Compute standard deviation of returns
-    stds = underlying.rolling(period, min_periods=0).std()
-    
-    # 2. Filter out NaNs where no primary weight exists
-    stds = stds.where(weights.notna())
+    stds = underlying.rolling(period, min_periods=10).std().replace(0, np.nan)
+    inv_stds = 1.0 / stds
+    inv_stds = inv_stds.fillna(0.0)
 
-    # 3. Inverse stds and normalize
-    std_inverse = 1 / stds.div(stds.sum(axis="columns"), axis="index")
-    
-    # 4. Handle division by zero
-    std_inverse[std_inverse == np.inf] = 0.0
-    
-    # 5. Final normalization scaled by active assets count
-    return std_inverse.div(std_inverse.sum(axis="columns"), axis="index").mul(
-        weights.count(axis="columns"), axis="index"
-    ).fillna(0.0)
+    long_mask = weights > 0
+    short_mask = weights < 0
+
+    long_weights = inv_stds.where(long_mask, 0.0)
+    long_sum = long_weights.sum(axis=1).replace(0, 1.0)
+    long_normalized = long_weights.div(long_sum, axis=0) * 0.50
+
+    short_weights = inv_stds.where(short_mask, 0.0)
+    short_sum = short_weights.sum(axis=1).replace(0, 1.0)
+    short_normalized = -short_weights.div(short_sum, axis=0) * 0.50
+
+    final_portfolio_weights = long_normalized + short_normalized
+    return final_portfolio_weights.fillna(0.0)
 
 def backtest_portfolio(
     weights: pd.DataFrame,

@@ -400,36 +400,32 @@ def run_strategy_backtest(
         period=params.get('inverse_vol_period', 120)
     )
     
-    portfolio_weights = target_weights_df.mul(risk_weights, axis="columns")
+    portfolio_weights = risk_weights.copy()
     
-    # Apply Macro-Regime Risk Overlay
+    # PA 5.1: Sigmoid Continuous Exposure Scaling
     try:
         from multifactor_portfolio.util.macro_collector import download_macro_features
-        print("Applying Macro-Regime Risk Overlay...")
+        print("Applying PA 5.1 Sigmoid Continuous Macro-Regime Risk Overlay...")
         start_dt_str = eval_dates.min().strftime('%Y-%m-%d')
         end_dt_str = eval_dates.max().strftime('%Y-%m-%d')
         macro_df = download_macro_features(local_data_dir, start_date=start_dt_str, end_date=end_dt_str)
         if not macro_df.empty:
             macro_df = macro_df.reindex(portfolio_weights.index).ffill().bfill()
             
-            vix_ma = macro_df['vix'].rolling(14, min_periods=1).mean()
-            fng_ma = macro_df['fear_greed'].rolling(14, min_periods=1).mean()
-            dvol_ma = macro_df['dvol_btc'].rolling(14, min_periods=1).mean()
+            vix_z = (macro_df['vix'] - macro_df['vix'].rolling(120, min_periods=30).mean()) / macro_df['vix'].rolling(120, min_periods=30).std().replace(0, 1)
+            fng_z = -(macro_df['fear_greed'] - macro_df['fear_greed'].rolling(120, min_periods=30).mean()) / macro_df['fear_greed'].rolling(120, min_periods=30).std().replace(0, 1)
+            dvol_z = (macro_df['dvol_btc'] - macro_df['dvol_btc'].rolling(120, min_periods=30).mean()) / macro_df['dvol_btc'].rolling(120, min_periods=30).std().replace(0, 1)
             
-            vix_threshold = params.get('stress_vix_threshold', 22.0)
-            fng_threshold = params.get('stress_fng_threshold', 30.0)
-            dvol_threshold = params.get('stress_dvol_threshold', 65.0)
+            stress_score = (vix_z.fillna(0.0) + fng_z.fillna(0.0) + dvol_z.fillna(0.0)) / 3.0
             
-            stress_flag = (vix_ma > vix_threshold) | (fng_ma < fng_threshold) | (dvol_ma > dvol_threshold)
-            
-            stress_multiplier = params.get('stress_multiplier', 0.5)
-            regime_multiplier = pd.Series(1.0, index=portfolio_weights.index)
-            regime_multiplier[stress_flag.fillna(False)] = stress_multiplier
+            # Sigmoid smooth exposure scaling: 1 / (1 + exp(1.5 * (stress_score - 0.5)))
+            regime_multiplier = 1.0 / (1.0 + np.exp(1.5 * (stress_score - 0.5)))
+            regime_multiplier = regime_multiplier.clip(lower=0.2, upper=1.0)
             
             portfolio_weights = portfolio_weights.mul(regime_multiplier, axis=0)
-            print(f"Applied stress multiplier {stress_multiplier} on {stress_flag.sum()} out of {len(portfolio_weights)} trading days.")
+            print(f"Applied PA 5.1 Sigmoid Exposure Scaling. Mean exposure multiplier: {regime_multiplier.mean():.4f}")
     except Exception as e:
-        print(f"Warning: Failed to apply Macro-Regime Risk Overlay: {e}")
+        print(f"Warning: Failed to apply PA 5.1 Sigmoid Macro Risk Overlay: {e}")
         
     allocation_cap = params.get('allocation_cap', 0.2)
     portfolio_weights = portfolio_weights.clip(lower=-allocation_cap, upper=allocation_cap)

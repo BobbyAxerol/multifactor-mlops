@@ -102,12 +102,29 @@ def optimize_parameters(
 
         try:
             with nostdout():
-                _, _, metrics = run_strategy_backtest(
+                _, equity_df, metrics = run_strategy_backtest(
                     data_dict=raw_dict,
                     params=params,
                     local_data_dir=local_data_dir
                 )
-            return metrics["sharpe_ratio"]
+            
+            # Mode 4 is_only_robust: Sub-period temporal scoring
+            if params.get('optimization_mode') == 'mode_4_is_only_robust' or params.get('mode_4_is_only_robust', {}).get('active'):
+                rets = equity_df['return'].values
+                if len(rets) > 60:
+                    chunks = np.array_split(rets, 6)
+                    sub_sharpes = []
+                    for chunk in chunks:
+                        if len(chunk) > 10 and np.std(chunk) > 1e-8:
+                            s = (np.mean(chunk) / np.std(chunk)) * np.sqrt(365)
+                        else:
+                            s = -1.0
+                        sub_sharpes.append(s)
+                    dispersion_penalty = params.get('mode_4_is_only_robust', {}).get('dispersion_penalty', 0.5)
+                    robust_score = np.mean(sub_sharpes) - dispersion_penalty * np.std(sub_sharpes)
+                    return float(robust_score)
+            
+            return float(metrics["sharpe_ratio"])
         except Exception as e:
             return -999.0
 
