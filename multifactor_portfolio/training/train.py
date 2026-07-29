@@ -21,6 +21,59 @@ from multifactor_portfolio.util.rebalance import (
 )
 from multifactor_portfolio.util.metrics import calculate_performance_metrics
 
+def calculate_ml_evaluation_metrics(y_true: pd.Series, y_pred: np.ndarray, index: pd.Index) -> Dict[str, float]:
+    """
+    Computes ML Directional Classification & Rank IC metrics.
+    """
+    y_true_vals = y_true.values if hasattr(y_true, 'values') else y_true
+    
+    # Directional Sign Accuracy
+    y_true_sign = np.where(y_true_vals > 0, 1, 0)
+    y_pred_sign = np.where(y_pred > 0, 1, 0)
+    
+    acc = np.mean(y_true_sign == y_pred_sign)
+    
+    # Precision, Recall, F1
+    tp = np.sum((y_true_sign == 1) & (y_pred_sign == 1))
+    fp = np.sum((y_true_sign == 0) & (y_pred_sign == 1))
+    fn = np.sum((y_true_sign == 1) & (y_pred_sign == 0))
+    
+    prec = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+    rec = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+    f1 = 2 * (prec * rec) / (prec + rec) if (prec + rec) > 0 else 0.0
+    
+    # R2 & MSE
+    ss_res = np.sum((y_true_vals - y_pred) ** 2)
+    ss_tot = np.sum((y_true_vals - np.mean(y_true_vals)) ** 2)
+    r2 = 1.0 - (ss_res / ss_tot) if ss_tot > 0 else 0.0
+    mse = np.mean((y_true_vals - y_pred) ** 2)
+    
+    # Daily Rank IC (Spearman correlation per daily timestamp)
+    from scipy.stats import spearmanr
+    eval_df = pd.DataFrame({'true': y_true_vals, 'pred': y_pred}, index=index)
+    daily_ic = []
+    time_level = 'Time' if 'Time' in eval_df.index.names else eval_df.index.names[0]
+    for dt, group in eval_df.groupby(level=time_level):
+        if len(group) >= 5 and group['true'].std() > 1e-8 and group['pred'].std() > 1e-8:
+            ic, _ = spearmanr(group['true'], group['pred'])
+            if not np.isnan(ic):
+                daily_ic.append(ic)
+                
+    mean_ic = float(np.mean(daily_ic)) if daily_ic else 0.0
+    std_ic = float(np.std(daily_ic)) if daily_ic else 0.0
+    ic_ir = mean_ic / std_ic if std_ic > 1e-8 else 0.0
+    
+    return {
+        'ml_accuracy': round(float(acc), 4),
+        'ml_precision': round(float(prec), 4),
+        'ml_recall': round(float(rec), 4),
+        'ml_f1_score': round(float(f1), 4),
+        'ml_rank_ic': round(float(mean_ic), 4),
+        'ml_ic_ir': round(float(ic_ir), 4),
+        'ml_r2_score': round(float(r2), 4),
+        'ml_mse': round(float(mse), 6)
+    }
+
 def load_ohlcv_data(data_path: str, start_date: str = '2020-01-01') -> Dict[str, pd.DataFrame]:
     """
     Loads daily OHLCV data using the unified data loader from _get_data,
@@ -225,10 +278,12 @@ def generate_walk_forward_target_weights(
             
         predicted_returns_df = pd.Series(preds, index=panel_df.index).unstack(level='Symbol').fillna(0.0)
         
+        ml_metrics = calculate_ml_evaluation_metrics(y, preds, panel_df.index)
+        
         engine_bin = CrossSectionalFactorEngine(symbols=target_symbols, quantiles=params.get('quantiles', 20))
         final_weights_df = engine_bin.create_cross_sectional_bins(predicted_returns_df)
         
-        return final_weights_df, all_dates[0], target_symbols, bst
+        return final_weights_df, all_dates[0], target_symbols, bst, ml_metrics
 
     # Walk-forward mode
     split_info = split_data(data_dict, split_mode=split_mode, target_window=max(windows))
@@ -246,6 +301,8 @@ def generate_walk_forward_target_weights(
 
     all_active_symbols = set()
     fold_weights_list = []
+    fold_y_true = []
+    fold_y_pred = []
     last_bst = None
     
     print(f"Executing strategy over {len(folds)} walk-forward folds...")
@@ -354,6 +411,10 @@ def generate_walk_forward_target_weights(
             dtest = xgb.DMatrix(X_test)
             preds = bst.predict(dtest)
         
+        y_test = panel_test['target']
+        fold_y_true.append(y_test)
+        fold_y_pred.append(pd.Series(preds, index=panel_test.index))
+        
         # Unstack predictions
         predicted_returns_df = pd.Series(preds, index=panel_test.index).unstack(level='Symbol').fillna(0.0)
         
@@ -366,7 +427,14 @@ def generate_walk_forward_target_weights(
     oos_weights_df = pd.concat(fold_weights_list, axis=0).sort_index().fillna(0.0)
     first_test_start = folds[0]['test'][next(iter(folds[0]['test']))].index.min()
     
-    return oos_weights_df, first_test_start, list(all_active_symbols), last_bst
+    if fold_y_true and fold_y_pred:
+        concat_y_true = pd.concat(fold_y_true)
+        concat_y_pred = pd.concat(fold_y_pred)
+        ml_metrics = calculate_ml_evaluation_metrics(concat_y_true, concat_y_pred.values, concat_y_true.index)
+    else:
+        ml_metrics = {}
+        
+    return oos_weights_df, first_test_start, list(all_active_symbols), last_bst, ml_metrics
 
 def run_strategy_backtest(
     data_dict: Dict[str, pd.DataFrame],
@@ -381,7 +449,7 @@ def run_strategy_backtest(
         all_dates = all_dates.union(df.index)
     all_dates = pd.DatetimeIndex(sorted(all_dates))
     
-    target_weights_df, eval_start_date, target_symbols, bst = generate_walk_forward_target_weights(
+    target_weights_df, eval_start_date, target_symbols, bst, ml_metrics = generate_walk_forward_target_weights(
         data_dict=data_dict,
         params=params,
         local_data_dir=local_data_dir,
@@ -505,6 +573,14 @@ def run_strategy_backtest(
         equity_df, 
         trading_days_per_year=params.get('trading_days_per_year', 365)
     )
+    metrics.update(ml_metrics)
+    
+    print("=== ML MODEL EVALUATION METRICS ===")
+    print(f"  -> Accuracy (Sign Direction): {metrics.get('ml_accuracy', 0.0):.4f}")
+    print(f"  -> F1-Score: {metrics.get('ml_f1_score', 0.0):.4f}")
+    print(f"  -> Precision: {metrics.get('ml_precision', 0.0):.4f} | Recall: {metrics.get('ml_recall', 0.0):.4f}")
+    print(f"  -> Rank IC: {metrics.get('ml_rank_ic', 0.0):.4f} | IC IR: {metrics.get('ml_ic_ir', 0.0):.4f}")
+    print(f"  -> R2 Explanatory Power: {metrics.get('ml_r2_score', 0.0):.4f} | MSE: {metrics.get('ml_mse', 0.0):.6f}")
     
     # Attach model for MLflow registration
     metrics['__bst__'] = bst

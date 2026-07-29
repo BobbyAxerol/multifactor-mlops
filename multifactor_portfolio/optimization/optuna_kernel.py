@@ -108,11 +108,13 @@ def optimize_parameters(
                     local_data_dir=local_data_dir
                 )
             
-            opt_mode = params.get('optimization_mode', 'mode_5_full_robust')
-            # Mode 4 & Mode 5 Robustness scoring: Sub-period temporal scoring
-            if opt_mode in ['mode_4_is_only_robust', 'mode_5_full_robust'] or params.get('mode_5_full_robust', {}).get('active'):
+            qbt_sharpe = float(metrics.get("sharpe_ratio", 0.0))
+            opt_mode = params.get('optimization_mode', 'mode_4_is_only_robust')
+            
+            # Mode 4 is_only_robust: QuantBT IS Sharpe Ratio minus temporal sub-period dispersion
+            if opt_mode in ['mode_4_is_only_robust', 'mode_5_full_robust'] or params.get('mode_4_is_only_robust', {}).get('active'):
                 rets = equity_df['return'].values
-                n_chunks = 8 if opt_mode == 'mode_5_full_robust' else 6
+                n_chunks = 6 if opt_mode == 'mode_4_is_only_robust' else 8
                 if len(rets) > 60:
                     chunks = np.array_split(rets, n_chunks)
                     sub_sharpes = []
@@ -122,11 +124,11 @@ def optimize_parameters(
                         else:
                             s = -1.0
                         sub_sharpes.append(s)
-                    dispersion_penalty = 0.5
-                    robust_score = np.mean(sub_sharpes) - dispersion_penalty * np.std(sub_sharpes)
+                    dispersion_penalty = params.get('mode_4_is_only_robust', {}).get('dispersion_penalty', 0.5)
+                    robust_score = qbt_sharpe - dispersion_penalty * np.std(sub_sharpes)
                     return float(robust_score)
             
-            return float(metrics["sharpe_ratio"])
+            return qbt_sharpe
         except Exception as e:
             return -999.0
 
