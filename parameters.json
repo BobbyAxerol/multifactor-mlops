@@ -15,7 +15,7 @@
     "quantbt_repo_path": "/root/bobby/pool_alpha/quantbt"
   },
   "training": {
-    "split_mode": "walk_forward_2024",
+    "split_mode": "train_test_split_2024",
     "fee": 0.0005,
     "allocation_cap": 0.1,
     "lag": 1,
@@ -30,14 +30,15 @@
     "backend": "native_portfolio"
   },
   "optimization": {
-    "split_mode": "walk_forward_2024",
+    "split_mode": "train_test_split_2024",
     "split_frequency": "single",
     "start_year": 2024,
     "n_trials": 50,
     "optuna_early_stopping": 50,
-    "optimization_mode": "mode_5_full_robust",
+    "optimization_mode": "mode_4_is_only_robust",
     "random_seed": 42,
     "_available_split_modes": [
+      "train_test_split_2024",
       "walk_forward_2023",
       "walk_forward_2024"
     ],
@@ -49,8 +50,23 @@
       "mode_5_full_robust"
     ]
   },
-  "mode_5_full_robust": {
+  "mode_4_is_only_robust": {
     "active": true,
+    "scoring_backend": "endpoint",
+    "scoring_trading_days": 365,
+    "candidate_selection_metric": "is_only_robust",
+    "is_subperiods": 6,
+    "q25_weight": 0.3,
+    "dispersion_penalty": 0.5,
+    "temporal_weight": 0.65,
+    "plateau_weight": 0.35,
+    "flat_top_fraction": 0.1,
+    "flat_eps": 0.15,
+    "flat_min_samples": 3,
+    "flat_selector": "medoid"
+  },
+  "mode_5_full_robust": {
+    "active": false,
     "candidate_selection_metric": "full_robust",
     "top_is_fraction": 0.1,
     "is_subperiods": 8,

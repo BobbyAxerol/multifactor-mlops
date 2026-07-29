@@ -435,12 +435,52 @@ def run_strategy_backtest(
     portfolio_weights = portfolio_weights.clip(lower=-allocation_cap, upper=allocation_cap)
     
     print("Running portfolio backtest...")
-    backtest_result = backtest_portfolio(
-        weights=portfolio_weights,
-        underlying=underlying_price_df,
-        transaction_cost=params.get('fee', 0.0005),
-        lag=params.get('lag', 1)
-    )
+    use_quantbt = params.get('scoring_backend') == 'endpoint' or params.get('backend') == 'quantbt'
+    quantbt_executed = False
+    
+    if use_quantbt:
+        try:
+            sys.path.append(params.get('quantbt_repo_path', '/root/bobby/pool_alpha/quantbt'))
+            sys.path.append('/root/bobby/pool_alpha')
+            from quantbt.endpoint import QuantBTEndpoint
+            
+            scaled_weights = portfolio_weights.copy()
+            if float(scaled_weights.abs().sum(axis=1).max()) >= 0.999:
+                scaled_weights = scaled_weights * 0.99
+                
+            bt_engine = QuantBTEndpoint.portfolio(
+                portfolio_mode="longshort",
+                backend="native_portfolio",
+                hedge_type="target_weight",
+                initial_capital=params.get('initial_capital', 100000.0),
+                leverage=1.0,
+                asset_type="crypto",
+                use_funding=False,
+                fee=params.get('fee', 0.0005) * 2.0,
+                contract_size=1.0,
+                report_level="minimal"
+            )
+            qbt_res = bt_engine.backtest(positions=scaled_weights, data=data_dict)
+            qbt_rets = getattr(qbt_res, "portfolio_returns", None)
+            if qbt_rets is not None and not qbt_rets.empty:
+                backtest_result = PortfolioBacktestResult(
+                    portfolio_returns=qbt_rets,
+                    component_returns=pd.DataFrame(),
+                    transaction_costs=pd.Series(0.0, index=qbt_rets.index),
+                    lag=params.get('lag', 1)
+                )
+                quantbt_executed = True
+                print("QuantBT Endpoint backtest executed successfully.")
+        except Exception as q_err:
+            print(f"Warning: QuantBT Endpoint execution failed ({q_err}). Falling back to native vector backtest...")
+
+    if not quantbt_executed:
+        backtest_result = backtest_portfolio(
+            weights=portfolio_weights,
+            underlying=underlying_price_df,
+            transaction_cost=params.get('fee', 0.0005),
+            lag=params.get('lag', 1)
+        )
     
     portfolio_equity = (1.0 + backtest_result.portfolio_returns).cumprod()
     
