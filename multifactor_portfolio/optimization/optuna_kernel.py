@@ -109,9 +109,10 @@ def optimize_parameters(
                 )
             
             qbt_sharpe = float(metrics.get("sharpe_ratio", 0.0))
+            rank_ic = float(metrics.get("ml_rank_ic", 0.0))
             opt_mode = params.get('optimization_mode', 'mode_4_is_only_robust')
             
-            # Mode 4 is_only_robust: QuantBT IS Sharpe Ratio minus temporal sub-period dispersion
+            # Mode 4 is_only_robust: QuantBT IS Sharpe + 0.5 * Rank IC - Sub-period dispersion penalty
             if opt_mode in ['mode_4_is_only_robust', 'mode_5_full_robust'] or params.get('mode_4_is_only_robust', {}).get('active'):
                 rets = equity_df['return'].values
                 n_chunks = 6 if opt_mode == 'mode_4_is_only_robust' else 8
@@ -125,7 +126,7 @@ def optimize_parameters(
                             s = -1.0
                         sub_sharpes.append(s)
                     dispersion_penalty = params.get('mode_4_is_only_robust', {}).get('dispersion_penalty', 0.5)
-                    robust_score = qbt_sharpe - dispersion_penalty * np.std(sub_sharpes)
+                    robust_score = qbt_sharpe + 0.5 * rank_ic - dispersion_penalty * np.std(sub_sharpes)
                     return float(robust_score)
             
             return qbt_sharpe
@@ -167,20 +168,33 @@ def main():
         print("Failed to load data.")
         sys.exit(1)
         
-    # Hyperparameter search ranges for XGBoost & Portfolio
+    # Multi-dimensional Search Space (Group 1 Narrow Model + Group 2, 3, 4 Structural Params)
     param_ranges = {
-        "learning_rate": (0.01, 0.20, 0.01),
-        "max_depth": (3, 8, 1),
-        "num_boost_round": (50, 300, 10),
-        "colsample_bytree": (0.1, 0.6, 0.1),
+        # Group 1: Model Hyperparameters (Narrow anti-overfit range: depth 2-4)
+        "learning_rate": (0.01, 0.08, 0.01),
+        "max_depth": (2, 4, 1),
+        "num_boost_round": (40, 120, 10),
+        "colsample_bytree": (0.2, 0.5, 0.1),
+
+        # Group 2: Data & Universe Engine (Expanded Universe up to 80 coins)
+        "top_n_symbols": [30, 40, 50, 60, 80],
         "quantiles": (10, 40, 5),
-        "allocation_cap": (0.05, 0.40, 0.05)
+        "train_step_days": [1, 2, 3, 5],
+
+        # Group 3: Portfolio Risk & Capital Allocation
+        "inverse_vol_period": [60, 90, 120, 180],
+        "allocation_cap": (0.10, 0.35, 0.05),
+
+        # Group 4: Macro Regime Protection Overlay
+        "stress_vix_threshold": (18.0, 26.0, 2.0),
+        "stress_fng_threshold": (20.0, 35.0, 5.0),
+        "stress_dvol_threshold": (55.0, 70.0, 5.0),
+        "stress_multiplier": (0.3, 0.7, 0.1)
     }
     
     fixed = {
         "asset_class": asset_class,
         "universe_name": all_params.get("universe_name", "binance_daily"),
-        "top_n_symbols": all_params.get("top_n_symbols", 40),
         "fee": all_params.get("fee", 0.0005),
         "slippage": all_params.get("slippage", 0.0001),
         "leverage": all_params.get("leverage", 3.0),
