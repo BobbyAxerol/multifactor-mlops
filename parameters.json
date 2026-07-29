@@ -1,11 +1,11 @@
 {
   "features": {
     "model_type": "xgboost",
-    "learning_rate": 0.04,
-    "max_depth": 7,
+    "learning_rate": 0.02,
+    "max_depth": 3,
     "num_leaves": 15,
-    "num_boost_round": 230,
-    "colsample_bytree": 0.6
+    "num_boost_round": 80,
+    "colsample_bytree": 0.3
   },
   "dataset": {
     "asset_class": "crypto",
@@ -15,7 +15,7 @@
     "quantbt_repo_path": "/root/bobby/pool_alpha/quantbt"
   },
   "training": {
-    "split_mode": "walk_forward_2023",
+    "split_mode": "walk_forward_2024",
     "fee": 0.0005,
     "allocation_cap": 0.1,
     "lag": 1,
@@ -30,10 +30,10 @@
     "backend": "native_portfolio"
   },
   "optimization": {
-    "split_mode": "walk_forward_2023",
+    "split_mode": "walk_forward_2024",
     "split_frequency": "single",
-    "start_year": 2023,
-    "n_trials": 20,
+    "start_year": 2024,
+    "n_trials": 50,
     "optuna_early_stopping": 50,
     "optimization_mode": "mode_5_full_robust",
     "random_seed": 42,
