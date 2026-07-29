@@ -16,7 +16,8 @@ from multifactor_portfolio.util.data_collector import download_missing_data
 from multifactor_portfolio.util.rebalance import (
     get_underlying_price_df, 
     calculate_inverse_volatility_weighting, 
-    backtest_portfolio
+    backtest_portfolio,
+    PortfolioBacktestResult
 )
 from multifactor_portfolio.util.metrics import calculate_performance_metrics
 
@@ -458,8 +459,13 @@ def run_strategy_backtest(
                 report_level="minimal"
             )
             qbt_res = bt_engine.backtest(positions=scaled_weights, data=data_dict)
-            qbt_rets = getattr(qbt_res, "portfolio_returns", None)
-            if qbt_rets is not None and not qbt_rets.empty:
+            qbt_equity = getattr(qbt_res, "daily_equity", None)
+            if qbt_equity is not None and len(qbt_equity) > 0:
+                qbt_rets = qbt_equity.pct_change().fillna(0.0)
+            else:
+                qbt_rets = getattr(qbt_res, "daily_returns", getattr(qbt_res, "portfolio_returns", None))
+                
+            if qbt_rets is not None and len(qbt_rets) > 0:
                 backtest_result = PortfolioBacktestResult(
                     portfolio_returns=qbt_rets,
                     component_returns=pd.DataFrame(),
