@@ -13,7 +13,7 @@ Quantiles: 20
 
 --- QUANTBT PORTFOLIO METRICS ---
 Sharpe Ratio: 1.7746
-CAGR (%): 54.04%
+CAGR (%): 53.99%
 Total Return (%): 1162.98%
 Max Drawdown (%): 19.36%
 Profit Factor: 1.3495

@@ -716,10 +716,18 @@ def run_strategy_backtest(
     
     metrics = calculate_performance_metrics(
         equity_df, 
-        trading_days_per_year=params.get('trading_days_per_year', 365)
+        trading_days_per_year=365.0
     )
+    crypto_sharpe = metrics.get('sharpe_ratio')
+    crypto_cagr = metrics.get('cagr', 0.0)
+    crypto_cagr_pct = round(crypto_cagr * 100.0, 2)
+
     if qbt_metrics_report:
         metrics.update(qbt_metrics_report)
+        
+    # Enforce Crypto 365-day annualization standard
+    metrics['sharpe_ratio'] = crypto_sharpe
+    metrics['cagr_pct'] = crypto_cagr_pct
     metrics.update(ml_metrics)
     
     print("=== ML MODEL EVALUATION METRICS ===")
