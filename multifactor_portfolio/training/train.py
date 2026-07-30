@@ -595,37 +595,24 @@ def run_strategy_backtest(
             regime_multiplier = 1.0 / (1.0 + np.exp(1.5 * (effective_stress - 0.5)))
             stress_mult_floor = params.get('stress_multiplier', 0.4)
             regime_multiplier = regime_multiplier.clip(lower=stress_mult_floor, upper=1.0)
-            
+
+            # Asymmetric Macro Scaling: Scale down Long leg during crashes, scale down Short leg during bull runs
             eval_multiplier = regime_multiplier.reindex(eval_dates).fillna(1.0)
-            portfolio_weights = portfolio_weights.mul(eval_multiplier, axis=0)
-            print(f"Applied Regime-Aware Sigmoid Exposure Scaling. Mean exposure multiplier: {eval_multiplier.mean():.4f}")
+            
+            long_part = portfolio_weights.clip(lower=0.0).mul(eval_multiplier, axis=0)
+            # In bull market (crash_filter < 0.5), scale down short leg to eliminate negative carry drag
+            short_multiplier = (1.0 - crash_filter).clip(lower=stress_mult_floor, upper=1.0).reindex(eval_dates).fillna(1.0)
+            short_part = portfolio_weights.clip(upper=0.0).mul(short_multiplier, axis=0)
+            
+            portfolio_weights = (long_part + short_part).fillna(0.0)
+            print(f"Applied Asymmetric Sigmoid Macro Scaling (Long mult: {eval_multiplier.mean():.4f}, Short mult: {short_multiplier.mean():.4f}).")
     except Exception as e:
         print(f"Warning: Failed to apply PA 5.1 Sigmoid Macro Risk Overlay: {e}")
         
-    allocation_cap = params.get('allocation_cap', 0.15)
-    portfolio_weights = portfolio_weights.clip(lower=-allocation_cap, upper=allocation_cap)
+    train_cfg = params.get('training', {}) if isinstance(params.get('training'), dict) else {}
     
-    # Rebalance Schedule (daily, calendar_3d, calendar_5d, weekly_friday_exit)
-    rebalance_schedule = params.get('rebalance_schedule', 'weekly_friday_exit')
-    if rebalance_schedule != 'daily' and not portfolio_weights.empty:
-        from src.multifactor_mlops.portfolio.constructor import PortfolioConstructor
-        portfolio_weights = PortfolioConstructor.apply_calendar_holding_schedule(portfolio_weights, schedule=rebalance_schedule)
-        print(f"Applied Calendar Holding Schedule ({rebalance_schedule}).")
-
-    # Rebalance Drift Threshold Filter: Only rebalance if weight drift >= threshold (reduces trade turnover friction)
-    rebalance_thresh = params.get('rebalance_threshold', 0.03)
-    if rebalance_thresh > 0.0 and not portfolio_weights.empty:
-        filtered_weights = portfolio_weights.copy()
-        prev_row = filtered_weights.iloc[0].copy()
-        for idx in range(1, len(filtered_weights)):
-            curr_row = filtered_weights.iloc[idx].copy()
-            drift = (curr_row - prev_row).abs()
-            no_rebalance_mask = drift < rebalance_thresh
-            curr_row[no_rebalance_mask] = prev_row[no_rebalance_mask]
-            filtered_weights.iloc[idx] = curr_row
-            prev_row = curr_row
-        portfolio_weights = filtered_weights
-        print(f"Applied Rebalance Drift Threshold Filter ({rebalance_thresh*100:.1f}%).")
+    allocation_cap = params.get('allocation_cap') if params.get('allocation_cap') is not None else train_cfg.get('allocation_cap', 0.15)
+    portfolio_weights = portfolio_weights.clip(lower=-allocation_cap, upper=allocation_cap)
 
     print("Running portfolio backtest via QuantBT Endpoint...")
     from src.multifactor_mlops.backtest import QuantBTRunner, QuantBTExecutionError
@@ -633,6 +620,33 @@ def run_strategy_backtest(
     
     # Anti-Look-Ahead Bias: Enforce 1-bar execution lag
     scaled_weights = portfolio_weights.shift(1).fillna(0.0)
+
+    # Apply Calendar Holding Schedule POST-SHIFT to ensure Friday Close Exit and Monday Open Re-entry
+    rebalance_schedule = params.get('rebalance_schedule') if params.get('rebalance_schedule') is not None else train_cfg.get('rebalance_schedule', 'weekly_friday_exit')
+    if rebalance_schedule != 'daily' and not scaled_weights.empty:
+        from src.multifactor_mlops.portfolio.constructor import PortfolioConstructor
+        scaled_weights = PortfolioConstructor.apply_calendar_holding_schedule(scaled_weights, schedule=rebalance_schedule)
+        print(f"Applied Post-Shift Calendar Holding Schedule ({rebalance_schedule}).")
+
+    # Rebalance Drift Threshold Filter: Reset drift on calendar rebalance days so Monday entry is never blocked
+    rebalance_thresh = params.get('rebalance_threshold') if params.get('rebalance_threshold') is not None else train_cfg.get('rebalance_threshold', 0.03)
+    if rebalance_thresh > 0.0 and not scaled_weights.empty:
+        filtered_weights = scaled_weights.copy()
+        prev_row = filtered_weights.iloc[0].copy()
+        for idx in range(1, len(filtered_weights)):
+            curr_row = filtered_weights.iloc[idx].copy()
+            dt = filtered_weights.index[idx]
+            # Reset prev_row on Monday open or calendar step days
+            if dt.dayofweek == 0 or (rebalance_schedule == 'calendar_3d' and idx % 3 == 0) or (rebalance_schedule == 'calendar_5d' and idx % 5 == 0):
+                prev_row = curr_row.copy()
+            else:
+                drift = (curr_row - prev_row).abs()
+                no_rebalance_mask = drift < rebalance_thresh
+                curr_row[no_rebalance_mask] = prev_row[no_rebalance_mask]
+                filtered_weights.iloc[idx] = curr_row
+                prev_row = curr_row
+        scaled_weights = filtered_weights
+        print(f"Applied Schedule-Aware Rebalance Drift Threshold Filter ({rebalance_thresh*100:.1f}%).")
     
     runner = QuantBTRunner(quantbt_repo_path=params.get('quantbt_repo_path', '/root/bobby/pool_alpha/quantbt'))
     equity_df, qbt_metrics_report, qbt_res = runner.run_backtest(

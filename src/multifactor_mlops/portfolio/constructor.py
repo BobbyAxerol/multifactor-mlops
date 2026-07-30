@@ -46,15 +46,22 @@ class PortfolioConstructor:
         short_mask = rank_pct <= top_pct
 
         raw_weights = pd.DataFrame(0.0, index=predictions_df.index, columns=predictions_df.columns)
-        raw_weights[long_mask] = 1.0
-        if self.portfolio_mode == "longshort":
-            raw_weights[short_mask] = -1.0
+        
+        # Signal Conviction Sizing: Scale target weights proportionally to ML prediction magnitude
+        pos_preds = predictions_clean.clip(lower=0.0)
+        neg_preds = predictions_clean.clip(upper=0.0).abs()
+        
+        long_weighted = (pos_preds * long_mask.astype(float)).fillna(0.0)
+        short_weighted = (neg_preds * short_mask.astype(float)).fillna(0.0)
 
-        long_counts = (raw_weights > 0).sum(axis=1).replace(0, 1)
-        short_counts = (raw_weights < 0).sum(axis=1).replace(0, 1)
+        long_sums = long_weighted.sum(axis=1).replace(0, 1.0)
+        short_sums = short_weighted.sum(axis=1).replace(0, 1.0)
 
-        long_part = raw_weights.clip(lower=0.0).div(long_counts, axis=0)
-        short_part = raw_weights.clip(upper=0.0).div(short_counts, axis=0)
+        long_part = long_weighted.div(long_sums, axis=0)
+        short_part = -short_weighted.div(short_sums, axis=0)
+
+        if self.portfolio_mode != "longshort":
+            short_part = pd.DataFrame(0.0, index=predictions_df.index, columns=predictions_df.columns)
 
         return (long_part + short_part).fillna(0.0)
 
