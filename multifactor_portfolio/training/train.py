@@ -265,6 +265,8 @@ def generate_walk_forward_target_weights(
     """
     Generates out-of-sample portfolio weights fold-by-fold using XGBoost models to predict returns.
     """
+    from src.multifactor_mlops.config.loader import flatten_params
+    params = flatten_params(params)
     split_mode = params.get('split_mode', 'full')
     top_n = params.get('top_n_symbols', 40)
     windows = [7, 14, 30, 60, 90]
@@ -442,8 +444,8 @@ def generate_walk_forward_target_weights(
             lag=params.get('lag', 1)
         )
         
-        # Apply Step Sampling to training set if configured (to avoid serial autocorrelation)
-        train_step_days = params.get('train_step_days', 1)
+        train_cfg = params.get('training', {}) if isinstance(params.get('training'), dict) else {}
+        train_step_days = params.get('train_step_days') if params.get('train_step_days') is not None else train_cfg.get('train_step_days', 1)
         if train_step_days > 1 and not panel_train.empty:
             unique_train_dates = sorted(panel_train.index.get_level_values('Time').unique())
             sampled_train_dates = unique_train_dates[::train_step_days]
@@ -537,6 +539,9 @@ def run_strategy_backtest(
     """
     Executes the complete strategy, fully supporting Walk-Forward Out-Of-Sample validation.
     """
+    from src.multifactor_mlops.config.loader import flatten_params
+    params = flatten_params(params)
+
     all_dates = pd.Index([])
     for df in data_dict.values():
         all_dates = all_dates.union(df.index)
