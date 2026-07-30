@@ -605,6 +605,13 @@ def run_strategy_backtest(
     allocation_cap = params.get('allocation_cap', 0.15)
     portfolio_weights = portfolio_weights.clip(lower=-allocation_cap, upper=allocation_cap)
     
+    # Rebalance Schedule (daily, calendar_3d, calendar_5d, weekly_friday_exit)
+    rebalance_schedule = params.get('rebalance_schedule', 'weekly_friday_exit')
+    if rebalance_schedule != 'daily' and not portfolio_weights.empty:
+        from src.multifactor_mlops.portfolio.constructor import PortfolioConstructor
+        portfolio_weights = PortfolioConstructor.apply_calendar_holding_schedule(portfolio_weights, schedule=rebalance_schedule)
+        print(f"Applied Calendar Holding Schedule ({rebalance_schedule}).")
+
     # Rebalance Drift Threshold Filter: Only rebalance if weight drift >= threshold (reduces trade turnover friction)
     rebalance_thresh = params.get('rebalance_threshold', 0.03)
     if rebalance_thresh > 0.0 and not portfolio_weights.empty:

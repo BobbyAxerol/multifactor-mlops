@@ -58,6 +58,51 @@ class PortfolioConstructor:
 
         return (long_part + short_part).fillna(0.0)
 
+    @staticmethod
+    def apply_calendar_holding_schedule(
+        weights_df: pd.DataFrame,
+        schedule: str = "daily"
+    ) -> pd.DataFrame:
+        """
+        Applies calendar holding schedule to reduce turnover and avoid weekend volatility.
+        Schedules supported: 'daily', 'calendar_3d', 'calendar_5d', 'weekly_friday_exit'.
+        'weekly_friday_exit': Zeroes out positions on Saturdays and Sundays (dayofweek 5 & 6) to exit on Friday.
+        """
+        if schedule == "daily" or weights_df.empty:
+            return weights_df.copy()
+
+        scheduled_weights = weights_df.copy()
+
+        if schedule == "weekly_friday_exit":
+            # Zero out positions on Saturday (5) and Sunday (6)
+            is_weekend = scheduled_weights.index.dayofweek.isin([5, 6])
+            scheduled_weights.loc[is_weekend] = 0.0
+
+            # Hold Monday-Thursday weights steady until Friday close
+            prev_row = scheduled_weights.iloc[0].copy()
+            for i in range(1, len(scheduled_weights)):
+                dt = scheduled_weights.index[i]
+                if dt.dayofweek in [5, 6]:
+                    prev_row = pd.Series(0.0, index=scheduled_weights.columns)
+                elif dt.dayofweek == 0:  # Monday rebalance
+                    prev_row = scheduled_weights.iloc[i].copy()
+                else:  # Tue - Fri hold Monday weight
+                    if not prev_row.eq(0.0).all():
+                        scheduled_weights.iloc[i] = prev_row
+                    else:
+                        prev_row = scheduled_weights.iloc[i].copy()
+            return scheduled_weights
+
+        step = 3 if schedule == "calendar_3d" else 5
+        prev_row = scheduled_weights.iloc[0].copy()
+        for i in range(1, len(scheduled_weights)):
+            if i % step != 0:
+                scheduled_weights.iloc[i] = prev_row
+            else:
+                prev_row = scheduled_weights.iloc[i].copy()
+
+        return scheduled_weights
+
     def apply_risk_weights_and_constraints(
         self,
         target_signs: pd.DataFrame,
