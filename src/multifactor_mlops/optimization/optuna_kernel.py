@@ -48,9 +48,9 @@ class NestedWFOptunaOptimizer:
         # Sample hyperparameters
         lr = trial.suggest_float("learning_rate", 0.01, 0.08, step=0.01)
         max_depth = trial.suggest_int("max_depth", 2, 5)
-        quantiles = trial.suggest_int("quantiles", 10, 30, step=5)
-        inverse_vol_period = trial.suggest_int("inverse_vol_period", 60, 180, step=30)
-        allocation_cap = trial.suggest_float("allocation_cap", 0.10, 0.35, step=0.05)
+        quantiles = trial.suggest_int("quantiles", 10, 50, step=5)
+        inverse_vol_period = trial.suggest_int("inverse_vol_period", 60, 210, step=30)
+        allocation_cap = trial.suggest_float("allocation_cap", 0.10, 0.45, step=0.05)
 
         trial_params = base_params.copy()
         trial_params.update({

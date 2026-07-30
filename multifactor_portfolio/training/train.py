@@ -636,3 +636,49 @@ def run_strategy_backtest(
     save_backtest_report_and_chart(equity_df, metrics, params, project_root)
     
     return portfolio_weights, equity_df, metrics
+
+def run_dual_mode_backtest(
+    data_dict: Dict[str, pd.DataFrame],
+    params: dict,
+    local_data_dir: str
+) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    """
+    Executes backtests for both Mode 4 (Walk-Forward OOS) and Mode 5 (Full-Sample)
+    and formats a synchronous QuantBT comparative report.
+    """
+    print("\n====================================================")
+    print("   EXECUTING DUAL-MODE BACKTEST (MODE 4 & MODE 5)   ")
+    print("====================================================\n")
+
+    # Mode 4: Walk-Forward OOS
+    params_mode4 = params.copy()
+    params_mode4['split_mode'] = 'train_test_split_2024'
+    params_mode4['optimization_mode'] = 'mode_4_is_only_robust'
+    print("--- Running Mode 4 (Walk-Forward OOS: 2024 - 2026) ---")
+    weights_m4, equity_m4, metrics_m4 = run_strategy_backtest(data_dict, params_mode4, local_data_dir)
+
+    # Mode 5: Full-Sample
+    params_mode5 = params.copy()
+    params_mode5['split_mode'] = 'full'
+    params_mode5['optimization_mode'] = 'mode_5_full_robust'
+    print("\n--- Running Mode 5 (Full-Sample: 2020 - 2026) ---")
+    weights_m5, equity_m5, metrics_m5 = run_strategy_backtest(data_dict, params_mode5, local_data_dir)
+
+    print("\n====================================================")
+    print("   QUANTBT DUAL-MODE COMPARATIVE REPORT")
+    print("====================================================")
+    print("Metrics (QuantBT)               Mode 4 (OOS 2024-26)   Mode 5 (Full 2020-26)")
+    print("-" * 65)
+    print(f"Sharpe Ratio                    {metrics_m4.get('sharpe_ratio', 0.0):<22.4f} {metrics_m5.get('sharpe_ratio', 0.0):.4f}")
+    print(f"CAGR (%)                        {metrics_m4.get('cagr_pct', 0.0):<22.2f}% {metrics_m5.get('cagr_pct', 0.0):.2f}%")
+    print(f"Total Return (%)                {metrics_m4.get('total_return_pct', 0.0):<22.2f}% {metrics_m5.get('total_return_pct', 0.0):.2f}%")
+    print(f"Max Drawdown (%)                {metrics_m4.get('max_drawdown_pct', 0.0):<22.2f}% {metrics_m5.get('max_drawdown_pct', 0.0):.2f}%")
+    print(f"Profit Factor                   {metrics_m4.get('profit_factor', 0.0):<22.4f} {metrics_m5.get('profit_factor', 0.0):.4f}")
+    print(f"Long Hit Rate (%)               {metrics_m4.get('long_hitrate_pct', 0.0):<22.2f}% {metrics_m5.get('long_hitrate_pct', 0.0):.2f}%")
+    print(f"Short Hit Rate (%)              {metrics_m4.get('short_hitrate_pct', 0.0):<22.2f}% {metrics_m5.get('short_hitrate_pct', 0.0):.2f}%")
+    print(f"ML Sign Accuracy (%)            {metrics_m4.get('ml_accuracy', 0.0)*100:<22.2f}% {metrics_m5.get('ml_accuracy', 0.0)*100:.2f}%")
+    print("====================================================\n")
+
+    res_m4 = {"weights": weights_m4, "equity": equity_m4, "metrics": metrics_m4}
+    res_m5 = {"weights": weights_m5, "equity": equity_m5, "metrics": metrics_m5}
+    return res_m4, res_m5
