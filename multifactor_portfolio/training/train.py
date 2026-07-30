@@ -540,27 +540,29 @@ def run_strategy_backtest(
     eval_dates = all_dates[all_dates >= eval_start_date]
     target_weights_df = target_weights_df.reindex(eval_dates).fillna(0.0)
     
-    underlying_price_df = get_underlying_price_df(data_dict, target_symbols).reindex(eval_dates).ffill().bfill()
-    underlying_returns = underlying_price_df.pct_change()
+    # Use full price history for inverse vol and macro calculation to eliminate 60-day warmup gap on Day 1 of OOS
+    full_underlying_price_df = get_underlying_price_df(data_dict, target_symbols).ffill().bfill()
+    full_underlying_returns = full_underlying_price_df.pct_change()
+    underlying_price_df = full_underlying_price_df.reindex(eval_dates).ffill().bfill()
     
     print("Calculating inverse volatility risk weighting...")
-    risk_weights = calculate_inverse_volatility_weighting(
-        underlying=underlying_returns, 
-        weights=target_weights_df, 
+    full_risk_weights = calculate_inverse_volatility_weighting(
+        underlying=full_underlying_returns, 
+        weights=target_weights_df.reindex(all_dates).fillna(0.0), 
         period=params.get('inverse_vol_period', 120)
     )
-    
+    risk_weights = full_risk_weights.reindex(eval_dates).fillna(0.0)
     portfolio_weights = risk_weights.copy()
     
     # PA 5.1: Sigmoid Continuous Exposure Scaling
     try:
         from multifactor_portfolio.util.macro_collector import download_macro_features
         print("Applying PA 5.1 Sigmoid Continuous Macro-Regime Risk Overlay...")
-        start_dt_str = eval_dates.min().strftime('%Y-%m-%d')
-        end_dt_str = eval_dates.max().strftime('%Y-%m-%d')
-        macro_df = download_macro_features(local_data_dir, start_date=start_dt_str, end_date=end_dt_str)
+        min_hist_date = all_dates.min().strftime('%Y-%m-%d')
+        max_hist_date = eval_dates.max().strftime('%Y-%m-%d')
+        macro_df = download_macro_features(local_data_dir, start_date=min_hist_date, end_date=max_hist_date)
         if not macro_df.empty:
-            macro_df = macro_df.reindex(portfolio_weights.index).ffill().bfill()
+            macro_df = macro_df.reindex(all_dates).ffill().bfill()
             
             vix_z = (macro_df['vix'] - macro_df['vix'].rolling(120, min_periods=30).mean()) / macro_df['vix'].rolling(120, min_periods=30).std().replace(0, 1)
             fng_z = -(macro_df['fear_greed'] - macro_df['fear_greed'].rolling(120, min_periods=30).mean()) / macro_df['fear_greed'].rolling(120, min_periods=30).std().replace(0, 1)
@@ -572,17 +574,19 @@ def run_strategy_backtest(
             regime_multiplier = 1.0 / (1.0 + np.exp(1.5 * (stress_score - 0.5)))
             regime_multiplier = regime_multiplier.clip(lower=0.2, upper=1.0)
             
-            portfolio_weights = portfolio_weights.mul(regime_multiplier, axis=0)
-            print(f"Applied PA 5.1 Sigmoid Exposure Scaling. Mean exposure multiplier: {regime_multiplier.mean():.4f}")
+            eval_multiplier = regime_multiplier.reindex(eval_dates).fillna(1.0)
+            portfolio_weights = portfolio_weights.mul(eval_multiplier, axis=0)
+            print(f"Applied PA 5.1 Sigmoid Exposure Scaling. Mean exposure multiplier: {eval_multiplier.mean():.4f}")
     except Exception as e:
         print(f"Warning: Failed to apply PA 5.1 Sigmoid Macro Risk Overlay: {e}")
         
     allocation_cap = params.get('allocation_cap', 0.2)
     portfolio_weights = portfolio_weights.clip(lower=-allocation_cap, upper=allocation_cap)
     
-    print("Running portfolio backtest...")
+    print("Running portfolio backtest via QuantBT Endpoint...")
     use_quantbt = params.get('scoring_backend') == 'endpoint' or params.get('backend') == 'quantbt'
     quantbt_executed = False
+    qbt_metrics_report = {}
     
     if use_quantbt:
         try:
@@ -609,6 +613,11 @@ def run_strategy_backtest(
                 report_level="minimal"
             )
             qbt_res = bt_engine.backtest(positions=scaled_weights, data=data_dict)
+            
+            if hasattr(qbt_res, "show_metrics"):
+                print("\n=== QUANTBT NATIVE PORTFOLIO METRICS REPORT ===")
+                qbt_metrics_report = qbt_res.show_metrics(trading_days=params.get('trading_days_per_year', 365))
+                
             qbt_equity = getattr(qbt_res, "daily_equity", None)
             if qbt_equity is not None and len(qbt_equity) > 0:
                 qbt_rets = qbt_equity.pct_change().fillna(0.0)
@@ -618,6 +627,9 @@ def run_strategy_backtest(
             if qbt_rets is not None and len(qbt_rets) > 0:
                 backtest_result = PortfolioBacktestResult(
                     portfolio_returns=qbt_rets,
+                    portfolio_equity=qbt_equity if qbt_equity is not None else (1.0 + qbt_rets).cumprod(),
+                    positions=scaled_weights,
+                    asset_returns=pd.DataFrame(),
                     component_returns=pd.DataFrame(),
                     transaction_costs=pd.Series(0.0, index=qbt_rets.index),
                     lag=params.get('lag', 1)
@@ -654,6 +666,8 @@ def run_strategy_backtest(
         equity_df, 
         trading_days_per_year=params.get('trading_days_per_year', 365)
     )
+    if qbt_metrics_report:
+        metrics.update(qbt_metrics_report)
     metrics.update(ml_metrics)
     
     print("=== ML MODEL EVALUATION METRICS ===")
