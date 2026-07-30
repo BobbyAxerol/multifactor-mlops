@@ -98,7 +98,9 @@ def fit_final_production_model(
 
     if production_cutoff:
         cutoff_dt = pd.Timestamp(production_cutoff)
-        panel_df = panel_df[panel_df.index.get_level_values('Time') <= cutoff_dt]
+        lag_days = app_config.label.holding_bars + 1  # next-open to next-open+H
+        max_decision_dt = cutoff_dt - pd.Timedelta(days=lag_days)
+        panel_df = panel_df[panel_df.index.get_level_values('Time') <= max_decision_dt]
 
     feature_cols = [c for c in panel_df.columns if c not in ['target', 'Symbol']]
     X_train = panel_df[feature_cols].fillna(0.0)
