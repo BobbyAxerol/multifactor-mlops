@@ -237,6 +237,19 @@ def split_data(
                 test_dict = {sym: df[(df.index.year == y) & (((df.index.month - 1) // 3 + 1) == q)] for sym, df in data_dict.items()}
                 folds.append({"train": train_dict, "test": test_dict, "label": f"{y}-Q{q}"})
                 
+    elif split_mode.startswith('train_test_split_'):
+        try:
+            split_year = int(split_mode.split('_')[-1])
+        except ValueError:
+            split_year = 2024
+        split_date = pd.Timestamp(f"{split_year}-01-01")
+        test_dates = all_dates[all_dates >= split_date]
+        if not test_dates.empty:
+            train_end = split_date - pd.Timedelta(days=target_window)
+            train_dict = {sym: df[df.index <= train_end] for sym, df in data_dict.items()}
+            test_dict = {sym: df[df.index >= split_date] for sym, df in data_dict.items()}
+            folds.append({"train": train_dict, "test": test_dict, "label": f"{split_year}_OOS"})
+                
     return {
         "mode": "walk_forward",
         "folds": folds,
@@ -293,7 +306,8 @@ def generate_walk_forward_target_weights(
         _ = temp_engine.calculate_market_cap_proxy(klines_all, top_n=top_n)
         target_symbols = temp_engine.symbols
         
-        start_date = str(klines_all.index.get_level_values('time').min().strftime('%Y-%m-%d'))
+        times_list = [t for t in klines_all.index.get_level_values('time') if pd.notna(t)] if not klines_all.empty else []
+        start_date = pd.Timestamp(min(times_list)).strftime('%Y-%m-%d') if times_list else "2020-01-01"
         futures_data = download_missing_data(
             symbols=target_symbols,
             data_dir=local_data_dir,
@@ -358,12 +372,15 @@ def generate_walk_forward_target_weights(
     folds = split_info['folds']
     
     if not folds:
+        if split_mode != 'full':
+            raise ValueError(f"Unsupported or empty split_mode '{split_mode}'. Cannot generate walk-forward folds.")
         params_copy = params.copy()
         params_copy['split_mode'] = 'full'
         return generate_walk_forward_target_weights(data_dict, params_copy, local_data_dir, all_dates)
         
     from multifactor_portfolio.util.macro_collector import download_macro_features
-    min_date = all_dates.min().strftime('%Y-%m-%d')
+    clean_all_dates_list = [d for d in all_dates if pd.notna(d)]
+    min_date = pd.Timestamp(min(clean_all_dates_list)).strftime('%Y-%m-%d') if clean_all_dates_list else "2020-01-01"
     print("Downloading global macro features...")
     global_macro_df = download_macro_features(local_data_dir, start_date=min_date)
 
@@ -402,7 +419,8 @@ def generate_walk_forward_target_weights(
         all_active_symbols.update(target_symbols)
         
         # 2. Get funding rates up to test_end
-        start_date = str(klines_all_fold.index.get_level_values('time').min().strftime('%Y-%m-%d'))
+        times_fold_list = [t for t in klines_all_fold.index.get_level_values('time') if pd.notna(t)] if not klines_all_fold.empty else []
+        start_date = pd.Timestamp(min(times_fold_list)).strftime('%Y-%m-%d') if times_fold_list else "2020-01-01"
         futures_data = download_missing_data(
             symbols=target_symbols,
             data_dir=local_data_dir,
@@ -411,7 +429,8 @@ def generate_walk_forward_target_weights(
         
         funding_fold = futures_data['funding'].loc[:test_end]
         macro_fold = global_macro_df.loc[:test_end]
-        train_end = train_dict[next(iter(train_dict))].index.max()
+        valid_train_dates = [df.index.max() for df in train_dict.values() if not df.empty and len(df.index) > 0]
+        train_end = max(valid_train_dates) if valid_train_dates else test_end
         
         # 3. Prepare Train panel dataset
         panel_train = CrossSectionalFactorEngine.prepare_panel_dataset(
@@ -430,6 +449,10 @@ def generate_walk_forward_target_weights(
             sampled_train_dates = unique_train_dates[::train_step_days]
             panel_train = panel_train[panel_train.index.get_level_values('Time').isin(sampled_train_dates)]
             print(f"Downsampled training panel from {len(unique_train_dates)} to {len(sampled_train_dates)} dates using step {train_step_days} days.")
+            
+        if panel_train.empty:
+            print(f"Warning: Fold {label} panel_train is empty. Skipping fold.")
+            continue
             
         X_train = panel_train[selected_features].fillna(0.0)
         y_train = panel_train['target']
@@ -492,6 +515,8 @@ def generate_walk_forward_target_weights(
         fold_weights_list.append(final_weights_fold)
         
     # Combine out-of-sample weights
+    if not fold_weights_list:
+        raise ValueError("No valid walk-forward folds produced non-empty target weights.")
     oos_weights_df = pd.concat(fold_weights_list, axis=0).sort_index().fillna(0.0)
     first_test_start = folds[0]['test'][next(iter(folds[0]['test']))].index.min()
     
@@ -527,120 +552,101 @@ def run_strategy_backtest(
     eval_dates = all_dates[all_dates >= eval_start_date]
     target_weights_df = target_weights_df.reindex(eval_dates).fillna(0.0)
     
-    underlying_price_df = get_underlying_price_df(data_dict, target_symbols).reindex(eval_dates).ffill().bfill()
-    underlying_returns = underlying_price_df.pct_change()
+    # Raw underlying prices (ONLY forward fill for weekend/holiday gaps, NO bfill artificial backfilling)
+    full_underlying_price_df = get_underlying_price_df(data_dict, target_symbols).ffill()
+    full_underlying_returns = full_underlying_price_df.pct_change()
+    underlying_price_df = full_underlying_price_df.reindex(eval_dates).ffill()
     
     print("Calculating inverse volatility risk weighting...")
-    risk_weights = calculate_inverse_volatility_weighting(
-        underlying=underlying_returns, 
-        weights=target_weights_df, 
+    full_risk_weights = calculate_inverse_volatility_weighting(
+        underlying=full_underlying_returns, 
+        weights=target_weights_df.reindex(all_dates).fillna(0.0), 
         period=params.get('inverse_vol_period', 120)
     )
-    
+    risk_weights = full_risk_weights.reindex(eval_dates).fillna(0.0)
     portfolio_weights = risk_weights.copy()
     
     # PA 5.1: Sigmoid Continuous Exposure Scaling
     try:
         from multifactor_portfolio.util.macro_collector import download_macro_features
         print("Applying PA 5.1 Sigmoid Continuous Macro-Regime Risk Overlay...")
-        start_dt_str = eval_dates.min().strftime('%Y-%m-%d')
-        end_dt_str = eval_dates.max().strftime('%Y-%m-%d')
-        macro_df = download_macro_features(local_data_dir, start_date=start_dt_str, end_date=end_dt_str)
+        clean_all_dates = [d for d in all_dates if pd.notna(d)]
+        clean_eval_dates = [d for d in eval_dates if pd.notna(d)]
+        min_hist_date = pd.Timestamp(min(clean_all_dates)).strftime('%Y-%m-%d') if clean_all_dates else "2020-01-01"
+        max_hist_date = pd.Timestamp(max(clean_eval_dates)).strftime('%Y-%m-%d') if clean_eval_dates else "2026-07-29"
+        macro_df = download_macro_features(local_data_dir, start_date=min_hist_date, end_date=max_hist_date)
         if not macro_df.empty:
-            macro_df = macro_df.reindex(portfolio_weights.index).ffill().bfill()
+            # ONLY ffill weekend macro gaps, NO bfill artificial backfilling into past
+            macro_df = macro_df.reindex(all_dates).ffill()
             
             vix_z = (macro_df['vix'] - macro_df['vix'].rolling(120, min_periods=30).mean()) / macro_df['vix'].rolling(120, min_periods=30).std().replace(0, 1)
             fng_z = -(macro_df['fear_greed'] - macro_df['fear_greed'].rolling(120, min_periods=30).mean()) / macro_df['fear_greed'].rolling(120, min_periods=30).std().replace(0, 1)
             dvol_z = (macro_df['dvol_btc'] - macro_df['dvol_btc'].rolling(120, min_periods=30).mean()) / macro_df['dvol_btc'].rolling(120, min_periods=30).std().replace(0, 1)
             
+            # Regime-Aware Macro Stress: Scale down exposure ONLY during high volatility + negative market momentum (crash regimes)
+            btc_returns = full_underlying_returns['BTCUSDT'] if 'BTCUSDT' in full_underlying_returns.columns else full_underlying_returns.mean(axis=1)
+            btc_mom = btc_returns.rolling(30, min_periods=10).mean()
+            crash_filter = (btc_mom < 0.0).astype(float).reindex(all_dates).fillna(0.5)
+
             stress_score = (vix_z.fillna(0.0) + fng_z.fillna(0.0) + dvol_z.fillna(0.0)) / 3.0
             
-            # Sigmoid smooth exposure scaling: 1 / (1 + exp(1.5 * (stress_score - 0.5)))
-            regime_multiplier = 1.0 / (1.0 + np.exp(1.5 * (stress_score - 0.5)))
-            regime_multiplier = regime_multiplier.clip(lower=0.2, upper=1.0)
+            # Exposure multiplier decreases ONLY when stress is high AND market is in crash mode
+            effective_stress = stress_score * crash_filter
+            regime_multiplier = 1.0 / (1.0 + np.exp(1.5 * (effective_stress - 0.5)))
+            stress_mult_floor = params.get('stress_multiplier', 0.4)
+            regime_multiplier = regime_multiplier.clip(lower=stress_mult_floor, upper=1.0)
             
-            portfolio_weights = portfolio_weights.mul(regime_multiplier, axis=0)
-            print(f"Applied PA 5.1 Sigmoid Exposure Scaling. Mean exposure multiplier: {regime_multiplier.mean():.4f}")
+            eval_multiplier = regime_multiplier.reindex(eval_dates).fillna(1.0)
+            portfolio_weights = portfolio_weights.mul(eval_multiplier, axis=0)
+            print(f"Applied Regime-Aware Sigmoid Exposure Scaling. Mean exposure multiplier: {eval_multiplier.mean():.4f}")
     except Exception as e:
         print(f"Warning: Failed to apply PA 5.1 Sigmoid Macro Risk Overlay: {e}")
         
-    allocation_cap = params.get('allocation_cap', 0.2)
+    allocation_cap = params.get('allocation_cap', 0.15)
     portfolio_weights = portfolio_weights.clip(lower=-allocation_cap, upper=allocation_cap)
     
-    print("Running portfolio backtest...")
-    use_quantbt = params.get('scoring_backend') == 'endpoint' or params.get('backend') == 'quantbt'
-    quantbt_executed = False
-    
-    if use_quantbt:
-        try:
-            sys.path.append(params.get('quantbt_repo_path', '/root/bobby/pool_alpha/quantbt'))
-            sys.path.append('/root/bobby/pool_alpha')
-            from quantbt.endpoint import QuantBTEndpoint
-            
-            # Anti-Look-Ahead Bias: Enforce 1-bar execution lag
-            scaled_weights = portfolio_weights.shift(1).fillna(0.0)
-            if float(scaled_weights.abs().sum(axis=1).max()) >= 0.999:
-                scaled_weights = scaled_weights * 0.99
-                
-            bt_engine = QuantBTEndpoint.portfolio(
-                portfolio_mode=params.get('portfolio_mode', 'longshort'),
-                backend=params.get('backend', 'native_portfolio'),
-                hedge_type=params.get('hedge_type', 'target_weight'),
-                initial_capital=params.get('initial_capital', 100000.0),
-                leverage=params.get('leverage', 1.0),
-                asset_type=params.get('asset_class', 'crypto'),
-                use_funding=params.get('use_funding', False),
-                fee=params.get('fee', 0.0005) * 2.0,
-                slippage=params.get('slippage', 0.0001),
-                contract_size=1.0,
-                report_level="minimal"
-            )
-            qbt_res = bt_engine.backtest(positions=scaled_weights, data=data_dict)
-            qbt_equity = getattr(qbt_res, "daily_equity", None)
-            if qbt_equity is not None and len(qbt_equity) > 0:
-                qbt_rets = qbt_equity.pct_change().fillna(0.0)
-            else:
-                qbt_rets = getattr(qbt_res, "daily_returns", getattr(qbt_res, "portfolio_returns", None))
-                
-            if qbt_rets is not None and len(qbt_rets) > 0:
-                backtest_result = PortfolioBacktestResult(
-                    portfolio_returns=qbt_rets,
-                    component_returns=pd.DataFrame(),
-                    transaction_costs=pd.Series(0.0, index=qbt_rets.index),
-                    lag=params.get('lag', 1)
-                )
-                quantbt_executed = True
-                print("QuantBT Endpoint backtest executed successfully.")
-        except Exception as q_err:
-            print(f"Warning: QuantBT Endpoint execution failed ({q_err}). Falling back to native vector backtest...")
+    # Rebalance Schedule (daily, calendar_3d, calendar_5d, weekly_friday_exit)
+    rebalance_schedule = params.get('rebalance_schedule', 'weekly_friday_exit')
+    if rebalance_schedule != 'daily' and not portfolio_weights.empty:
+        from src.multifactor_mlops.portfolio.constructor import PortfolioConstructor
+        portfolio_weights = PortfolioConstructor.apply_calendar_holding_schedule(portfolio_weights, schedule=rebalance_schedule)
+        print(f"Applied Calendar Holding Schedule ({rebalance_schedule}).")
 
-    if not quantbt_executed:
-        backtest_result = backtest_portfolio(
-            weights=portfolio_weights,
-            underlying=underlying_price_df,
-            transaction_cost=params.get('fee', 0.0005),
-            lag=params.get('lag', 1)
-        )
+    # Rebalance Drift Threshold Filter: Only rebalance if weight drift >= threshold (reduces trade turnover friction)
+    rebalance_thresh = params.get('rebalance_threshold', 0.03)
+    if rebalance_thresh > 0.0 and not portfolio_weights.empty:
+        filtered_weights = portfolio_weights.copy()
+        prev_row = filtered_weights.iloc[0].copy()
+        for idx in range(1, len(filtered_weights)):
+            curr_row = filtered_weights.iloc[idx].copy()
+            drift = (curr_row - prev_row).abs()
+            no_rebalance_mask = drift < rebalance_thresh
+            curr_row[no_rebalance_mask] = prev_row[no_rebalance_mask]
+            filtered_weights.iloc[idx] = curr_row
+            prev_row = curr_row
+        portfolio_weights = filtered_weights
+        print(f"Applied Rebalance Drift Threshold Filter ({rebalance_thresh*100:.1f}%).")
+
+    print("Running portfolio backtest via QuantBT Endpoint...")
+    from src.multifactor_mlops.backtest import QuantBTRunner, QuantBTExecutionError
+    from src.multifactor_mlops.config import load_config
     
-    # Filter returns strictly to eval_dates to eliminate pre-evaluation zero padding
-    p_returns = backtest_result.portfolio_returns.copy()
-    if p_returns.index.tz is not None:
-        p_returns.index = p_returns.index.tz_localize(None)
-        
-    clean_eval_dates = eval_dates.tz_localize(None) if eval_dates.tz is not None else eval_dates
-    eval_returns = p_returns.reindex(clean_eval_dates).fillna(0.0)
-    portfolio_equity = (1.0 + eval_returns).cumprod()
+    # Anti-Look-Ahead Bias: Enforce 1-bar execution lag
+    scaled_weights = portfolio_weights.shift(1).fillna(0.0)
     
-    equity_df = pd.DataFrame({
-        'time': clean_eval_dates,
-        'equity': portfolio_equity.values,
-        'return': eval_returns.values
-    }).reset_index(drop=True)
+    runner = QuantBTRunner(quantbt_repo_path=params.get('quantbt_repo_path', '/root/bobby/pool_alpha/quantbt'))
+    equity_df, qbt_metrics_report, qbt_res = runner.run_backtest(
+        positions=scaled_weights,
+        data_dict=data_dict,
+        params=params
+    )
     
     metrics = calculate_performance_metrics(
         equity_df, 
         trading_days_per_year=params.get('trading_days_per_year', 365)
     )
+    if qbt_metrics_report:
+        metrics.update(qbt_metrics_report)
     metrics.update(ml_metrics)
     
     print("=== ML MODEL EVALUATION METRICS ===")
@@ -659,3 +665,49 @@ def run_strategy_backtest(
     save_backtest_report_and_chart(equity_df, metrics, params, project_root)
     
     return portfolio_weights, equity_df, metrics
+
+def run_dual_mode_backtest(
+    data_dict: Dict[str, pd.DataFrame],
+    params: dict,
+    local_data_dir: str
+) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    """
+    Executes backtests for both Mode 4 (Walk-Forward OOS) and Mode 5 (Full-Sample)
+    and formats a synchronous QuantBT comparative report.
+    """
+    print("\n====================================================")
+    print("   EXECUTING DUAL-MODE BACKTEST (MODE 4 & MODE 5)   ")
+    print("====================================================\n")
+
+    # Mode 4: Walk-Forward OOS
+    params_mode4 = params.copy()
+    params_mode4['split_mode'] = 'train_test_split_2024'
+    params_mode4['optimization_mode'] = 'mode_4_is_only_robust'
+    print("--- Running Mode 4 (Walk-Forward OOS: 2024 - 2026) ---")
+    weights_m4, equity_m4, metrics_m4 = run_strategy_backtest(data_dict, params_mode4, local_data_dir)
+
+    # Mode 5: Full-Sample
+    params_mode5 = params.copy()
+    params_mode5['split_mode'] = 'full'
+    params_mode5['optimization_mode'] = 'mode_5_full_robust'
+    print("\n--- Running Mode 5 (Full-Sample: 2020 - 2026) ---")
+    weights_m5, equity_m5, metrics_m5 = run_strategy_backtest(data_dict, params_mode5, local_data_dir)
+
+    print("\n====================================================")
+    print("   QUANTBT DUAL-MODE COMPARATIVE REPORT")
+    print("====================================================")
+    print("Metrics (QuantBT)               Mode 4 (OOS 2024-26)   Mode 5 (Full 2020-26)")
+    print("-" * 65)
+    print(f"Sharpe Ratio                    {metrics_m4.get('sharpe_ratio', 0.0):<22.4f} {metrics_m5.get('sharpe_ratio', 0.0):.4f}")
+    print(f"CAGR (%)                        {metrics_m4.get('cagr_pct', 0.0):<22.2f}% {metrics_m5.get('cagr_pct', 0.0):.2f}%")
+    print(f"Total Return (%)                {metrics_m4.get('total_return_pct', 0.0):<22.2f}% {metrics_m5.get('total_return_pct', 0.0):.2f}%")
+    print(f"Max Drawdown (%)                {metrics_m4.get('max_drawdown_pct', 0.0):<22.2f}% {metrics_m5.get('max_drawdown_pct', 0.0):.2f}%")
+    print(f"Profit Factor                   {metrics_m4.get('profit_factor', 0.0):<22.4f} {metrics_m5.get('profit_factor', 0.0):.4f}")
+    print(f"Long Hit Rate (%)               {metrics_m4.get('long_hitrate_pct', 0.0):<22.2f}% {metrics_m5.get('long_hitrate_pct', 0.0):.2f}%")
+    print(f"Short Hit Rate (%)              {metrics_m4.get('short_hitrate_pct', 0.0):<22.2f}% {metrics_m5.get('short_hitrate_pct', 0.0):.2f}%")
+    print(f"ML Sign Accuracy (%)            {metrics_m4.get('ml_accuracy', 0.0)*100:<22.2f}% {metrics_m5.get('ml_accuracy', 0.0)*100:.2f}%")
+    print("====================================================\n")
+
+    res_m4 = {"weights": weights_m4, "equity": equity_m4, "metrics": metrics_m4}
+    res_m5 = {"weights": weights_m5, "equity": equity_m5, "metrics": metrics_m5}
+    return res_m4, res_m5

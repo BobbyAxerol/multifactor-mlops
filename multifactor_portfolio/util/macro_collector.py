@@ -241,7 +241,7 @@ def download_macro_features(
         macro_df = macro_df.loc[:end_date]
         
     # Resample to daily frequency and ffill
-    macro_df = macro_df.resample('1D').last().ffill().bfill()
+    macro_df = macro_df.resample('1D').last().ffill()
     
     # 3. Check for completeness: Drop any feature with > 20% NaNs
     final_cols = []

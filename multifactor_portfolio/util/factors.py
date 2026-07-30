@@ -184,13 +184,19 @@ class CrossSectionalFactorEngine:
     def create_cross_sectional_bins(self, factor_data: pd.DataFrame) -> pd.DataFrame:
         """
         Thực hiện Binning chéo thị trường, chuyển Factors thành Trọng số Market Neutral Float.
+        Mỗi vế (Long/Short) được chuẩn hóa tổng trọng số bằng +1.0 và -1.0.
         """
         factor_data = factor_data.replace([np.inf, -np.inf], np.nan)
         
-        # PA 2.1: Tie-Breaking Percentile Ranking (rank pct=True, method='first')
+        # Tie-Breaking Percentile Ranking
         rank_pct = factor_data.rank(axis=1, pct=True, method='first')
         
-        top_pct = 1.0 / max(float(self.quantiles), 2.0)
+        # Limit top_pct between 5% and 25% for larger universes, fallback to 50% for small test universes
+        num_assets = len(factor_data.columns)
+        if num_assets <= 4:
+            top_pct = 0.5
+        else:
+            top_pct = min(0.25, max(0.05, 1.0 / float(self.quantiles)))
         long_mask = rank_pct > (1.0 - top_pct)
         short_mask = rank_pct <= top_pct
         
@@ -198,7 +204,15 @@ class CrossSectionalFactorEngine:
         final_weights[long_mask] = 1.0
         final_weights[short_mask] = -1.0
         
-        return final_weights.fillna(0.0)
+        # Normalize each row so Long leg sums to +1.0 and Short leg sums to -1.0
+        long_counts = (final_weights > 0).sum(axis=1).replace(0, 1)
+        short_counts = (final_weights < 0).sum(axis=1).replace(0, 1)
+        
+        long_part = final_weights.clip(lower=0.0).div(long_counts, axis=0)
+        short_part = final_weights.clip(upper=0.0).div(short_counts, axis=0)
+        
+        final_weights = (long_part + short_part).fillna(0.0)
+        return final_weights
 
     def ensemble_and_final_bin(self) -> pd.DataFrame:
         """Thực hiện Ensemble Factor và Final Binning (Theo quy trình Quant chuẩn)."""
