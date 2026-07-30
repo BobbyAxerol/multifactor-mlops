@@ -124,9 +124,10 @@ def main():
         # Save model booster based on model_type
         model_type = all_params.get('model_type', 'xgboost')
         
+        selected_path = os.path.join(os.path.dirname(__file__), "..", "research", "selected_features.json")
         model_artifacts = {
             "model_bundle": "model_bundle.joblib",
-            "selected_features": selected_path
+            "selected_features": selected_path if os.path.exists(selected_path) else "universe_symbols.json"
         }
         
         if model_type == 'lightgbm':
