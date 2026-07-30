@@ -585,83 +585,18 @@ def run_strategy_backtest(
     portfolio_weights = portfolio_weights.clip(lower=-allocation_cap, upper=allocation_cap)
     
     print("Running portfolio backtest via QuantBT Endpoint...")
-    use_quantbt = params.get('scoring_backend') == 'endpoint' or params.get('backend') == 'quantbt'
-    quantbt_executed = False
-    qbt_metrics_report = {}
+    from src.multifactor_mlops.backtest import QuantBTRunner, QuantBTExecutionError
+    from src.multifactor_mlops.config import load_config
     
-    if use_quantbt:
-        try:
-            sys.path.append(params.get('quantbt_repo_path', '/root/bobby/pool_alpha/quantbt'))
-            sys.path.append('/root/bobby/pool_alpha')
-            from quantbt.endpoint import QuantBTEndpoint
-            
-            # Anti-Look-Ahead Bias: Enforce 1-bar execution lag
-            scaled_weights = portfolio_weights.shift(1).fillna(0.0)
-            if float(scaled_weights.abs().sum(axis=1).max()) >= 0.999:
-                scaled_weights = scaled_weights * 0.99
-                
-            bt_engine = QuantBTEndpoint.portfolio(
-                portfolio_mode=params.get('portfolio_mode', 'longshort'),
-                backend=params.get('backend', 'native_portfolio'),
-                hedge_type=params.get('hedge_type', 'target_weight'),
-                initial_capital=params.get('initial_capital', 100000.0),
-                leverage=params.get('leverage', params.get('training', {}).get('leverage', 3.0)),
-                asset_type=params.get('asset_class', 'crypto'),
-                use_funding=params.get('use_funding', False),
-                fee=params.get('fee', 0.0005),
-                slippage=params.get('slippage', 0.0001),
-                contract_size=1.0,
-                report_level="minimal"
-            )
-            qbt_res = bt_engine.backtest(positions=scaled_weights, data=data_dict)
-            
-            if hasattr(qbt_res, "show_metrics"):
-                print("\n=== QUANTBT NATIVE PORTFOLIO METRICS REPORT ===")
-                qbt_metrics_report = qbt_res.show_metrics(trading_days=params.get('trading_days_per_year', 365))
-                
-            qbt_equity = getattr(qbt_res, "daily_equity", None)
-            if qbt_equity is not None and len(qbt_equity) > 0:
-                qbt_rets = qbt_equity.pct_change().fillna(0.0)
-            else:
-                qbt_rets = getattr(qbt_res, "daily_returns", getattr(qbt_res, "portfolio_returns", None))
-                
-            if qbt_rets is not None and len(qbt_rets) > 0:
-                backtest_result = PortfolioBacktestResult(
-                    portfolio_returns=qbt_rets,
-                    portfolio_equity=qbt_equity if qbt_equity is not None else (1.0 + qbt_rets).cumprod(),
-                    positions=scaled_weights,
-                    asset_returns=pd.DataFrame(),
-                    component_returns=pd.DataFrame(),
-                    transaction_costs=pd.Series(0.0, index=qbt_rets.index),
-                    lag=params.get('lag', 1)
-                )
-                quantbt_executed = True
-                print("QuantBT Endpoint backtest executed successfully.")
-        except Exception as q_err:
-            print(f"Warning: QuantBT Endpoint execution failed ({q_err}). Falling back to native vector backtest...")
-
-    if not quantbt_executed:
-        backtest_result = backtest_portfolio(
-            weights=portfolio_weights,
-            underlying=underlying_price_df,
-            transaction_cost=params.get('fee', 0.0005),
-            lag=params.get('lag', 1)
-        )
+    # Anti-Look-Ahead Bias: Enforce 1-bar execution lag
+    scaled_weights = portfolio_weights.shift(1).fillna(0.0)
     
-    # Filter returns strictly to eval_dates to eliminate pre-evaluation zero padding
-    p_returns = backtest_result.portfolio_returns.copy()
-    if p_returns.index.tz is not None:
-        p_returns.index = p_returns.index.tz_localize(None)
-        
-    clean_eval_dates = eval_dates.tz_localize(None) if eval_dates.tz is not None else eval_dates
-    eval_returns = p_returns.reindex(clean_eval_dates).fillna(0.0)
-    portfolio_equity = (1.0 + eval_returns).cumprod()
-    
-    equity_df = pd.DataFrame({
-        'time': clean_eval_dates,
-        'equity': portfolio_equity.values,
-        'return': eval_returns.values
-    }).reset_index(drop=True)
+    runner = QuantBTRunner(quantbt_repo_path=params.get('quantbt_repo_path', '/root/bobby/pool_alpha/quantbt'))
+    equity_df, qbt_metrics_report, qbt_res = runner.run_backtest(
+        positions=scaled_weights,
+        data_dict=data_dict,
+        params=params
+    )
     
     metrics = calculate_performance_metrics(
         equity_df, 
