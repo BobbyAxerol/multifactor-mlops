@@ -1,0 +1,117 @@
+{
+  "features": {
+    "model_type": "xgboost",
+    "learning_rate": 0.02,
+    "max_depth": 6,
+    "num_leaves": 15,
+    "num_boost_round": 125,
+    "colsample_bytree": 0.6,
+    "subsample": 0.8
+  },
+  "dataset": {
+    "asset_class": "crypto",
+    "universe_name": "binance_daily",
+    "top_n_symbols": 40,
+    "data_repo_path": "/root/bobby/pool_alpha/alphas_storage/_get_data",
+    "quantbt_repo_path": "/root/bobby/pool_alpha/quantbt"
+  },
+  "training": {
+    "split_mode": "train_test_split_2024",
+    "initial_capital": 100000.0,
+    "leverage": 3.0,
+    "allocation_cap": 0.3,
+    "volatility_ceiling": 0.04,
+    "fee": 0.0005,
+    "slippage": 0.0001,
+    "lag": 1,
+    "quantiles": 8,
+    "trading_days_per_year": 365,
+    "train_step_days": 4,
+    "inverse_vol_period": 14,
+    "rebalance_schedule": "calendar_3d",
+    "rebalance_threshold": 0.02,
+    "stress_vix_threshold": 20.0,
+    "stress_fng_threshold": 20.0,
+    "stress_dvol_threshold": 60.0,
+    "stress_multiplier": 0.8,
+    "backend": "native_portfolio",
+    "portfolio_mode": "longshort",
+    "hedge_type": "target_weight"
+  },
+  "optimization": {
+    "split_mode": "train_test_split_2024",
+    "split_frequency": "single",
+    "start_year": 2024,
+    "n_trials": 50,
+    "optuna_early_stopping": 50,
+    "optimization_mode": "mode_4_is_only_robust",
+    "random_seed": 42,
+    "_available_split_modes": [
+      "train_test_split_2024",
+      "walk_forward_2023",
+      "walk_forward_2024"
+    ],
+    "_available_optimization_modes": [
+      "mode_1_decay",
+      "mode_2_sbb",
+      "mode_3_flat_minima",
+      "mode_4_is_only_robust",
+      "mode_5_full_robust"
+    ]
+  },
+  "mode_4_is_only_robust": {
+    "active": true,
+    "scoring_backend": "endpoint",
+    "scoring_trading_days": 365,
+    "candidate_selection_metric": "is_only_robust",
+    "is_subperiods": 6,
+    "q25_weight": 0.3,
+    "dispersion_penalty": 0.5,
+    "temporal_weight": 0.65,
+    "plateau_weight": 0.35,
+    "flat_top_fraction": 0.1,
+    "flat_eps": 0.15,
+    "flat_min_samples": 3,
+    "flat_selector": "medoid"
+  },
+  "mode_5_full_robust": {
+    "active": false,
+    "candidate_selection_metric": "full_robust",
+    "top_is_fraction": 0.1,
+    "is_subperiods": 8,
+    "flat_eps": 0.12,
+    "flat_min_samples": 5,
+    "temporal_weight": 0.65,
+    "plateau_weight": 0.35,
+    "scoring_backend": "endpoint",
+    "scoring_trading_days": 365
+  },
+  "registration": {
+    "tags": [
+      "sharpe_ratio",
+      "cagr",
+      "max_drawdown",
+      "model_type",
+      "learning_rate",
+      "max_depth",
+      "num_leaves",
+      "num_boost_round",
+      "colsample_bytree",
+      "top_n_symbols",
+      "fee",
+      "slippage",
+      "leverage",
+      "allocation_cap",
+      "lag",
+      "quantiles",
+      "asset_class",
+      "universe_name",
+      "train_step_days",
+      "inverse_vol_period",
+      "stress_vix_threshold",
+      "stress_fng_threshold",
+      "stress_dvol_threshold",
+      "stress_multiplier"
+    ]
+  }
+}
