@@ -74,6 +74,74 @@ def calculate_ml_evaluation_metrics(y_true: pd.Series, y_pred: np.ndarray, index
         'ml_mse': round(float(mse), 6)
     }
 
+def save_backtest_report_and_chart(equity_df: pd.DataFrame, metrics: dict, params: dict, output_dir: str):
+    """
+    Saves performance_report.txt and performance_chart.png in output_dir whenever backtest is run.
+    """
+    import os
+    import matplotlib.pyplot as plt
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # 1. Save performance_report.txt
+    txt_path = os.path.join(output_dir, "performance_report.txt")
+    with open(txt_path, "w") as f:
+        f.write("=== MULTI-FACTOR MACRO STRATEGY PERFORMANCE REPORT ===\n\n")
+        f.write(f"Model Type: {params.get('model_type', params.get('features', {}).get('model_type', 'xgboost'))}\n")
+        f.write(f"Learning Rate: {params.get('learning_rate', params.get('features', {}).get('learning_rate', 0.04))}\n")
+        f.write(f"Max Depth: {params.get('max_depth', params.get('features', {}).get('max_depth', 4))}\n")
+        f.write(f"Num Boost Rounds: {params.get('num_boost_round', params.get('features', {}).get('num_boost_round', 100))}\n")
+        f.write(f"Leverage: {params.get('leverage', 3.0)}\n")
+        f.write(f"Inverse Vol Period: {params.get('inverse_vol_period', 60)}\n")
+        f.write(f"Quantiles: {params.get('quantiles', 20)}\n\n")
+        f.write("--- PORTFOLIO METRICS ---\n")
+        f.write(f"Sharpe Ratio: {metrics.get('sharpe_ratio', 0.0):.4f}\n")
+        f.write(f"CAGR: {metrics.get('cagr', 0.0)*100:.2f}%\n")
+        f.write(f"Max Drawdown: {metrics.get('max_drawdown', 0.0)*100:.2f}%\n\n")
+        f.write("--- ML MODEL EVALUATION METRICS ---\n")
+        f.write(f"Sign Direction Accuracy: {metrics.get('ml_accuracy', 0.0)*100:.2f}%\n")
+        f.write(f"Precision: {metrics.get('ml_precision', 0.0)*100:.2f}%\n")
+        f.write(f"Recall: {metrics.get('ml_recall', 0.0)*100:.2f}%\n")
+        f.write(f"F1-Score: {metrics.get('ml_f1_score', 0.0):.4f}\n")
+        f.write(f"Rank IC (Spearman): {metrics.get('ml_rank_ic', 0.0):.4f}\n")
+        f.write(f"IC IR: {metrics.get('ml_ic_ir', 0.0):.4f}\n")
+        f.write(f"R2 Explanatory Power: {metrics.get('ml_r2_score', 0.0)*100:.2f}%\n")
+        f.write(f"MSE: {metrics.get('ml_mse', 0.0):.6f}\n")
+        
+    # 2. Save performance_chart.png
+    chart_path = os.path.join(output_dir, "performance_chart.png")
+    try:
+        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 8), sharex=False, gridspec_kw={'height_ratios': [2.5, 1]})
+        
+        ax1.plot(equity_df['time'], equity_df['equity'], label=f'Strategy Equity (Sharpe: {metrics.get("sharpe_ratio", 0.0):.2f}, CAGR: {metrics.get("cagr", 0.0)*100:.1f}%)', color='#00d26a', linewidth=2.0)
+        ax1.set_title('Multi-Factor Macro Strategy Performance', fontsize=14, fontweight='bold', pad=12)
+        ax1.set_ylabel('Equity (Rebased 1.0)', fontsize=11, fontweight='bold')
+        ax1.legend(loc='upper left', frameon=True, facecolor='#1e1e1e', labelcolor='white')
+        ax1.set_facecolor('#141414')
+
+        cum_max = equity_df['equity'].cummax()
+        dd = (equity_df['equity'] / cum_max) - 1.0
+        ax2.fill_between(equity_df['time'], dd, 0, color='#ff4d4d', alpha=0.5, label=f'Max Drawdown ({metrics.get("max_drawdown", 0.0)*100:.1f}%)')
+        ax2.set_title('Drawdown Profile', fontsize=12, fontweight='bold', pad=8)
+        ax2.set_ylabel('Drawdown', fontsize=11, fontweight='bold')
+        ax2.legend(loc='lower left', frameon=True, facecolor='#1e1e1e', labelcolor='white')
+        ax2.set_facecolor('#141414')
+
+        fig.patch.set_facecolor('#0a0a0a')
+        ax1.tick_params(colors='white')
+        ax2.tick_params(colors='white')
+        ax1.yaxis.label.set_color('white')
+        ax2.yaxis.label.set_color('white')
+        ax1.title.set_color('white')
+        ax2.title.set_color('white')
+
+        plt.tight_layout()
+        plt.savefig(chart_path, dpi=300, facecolor=fig.get_facecolor(), edgecolor='none')
+        plt.close()
+        print(f"Automatically saved report to: {txt_path}")
+        print(f"Automatically saved chart to: {chart_path}")
+    except Exception as err:
+        print(f"Warning: Failed to generate performance chart: {err}")
+
 def load_ohlcv_data(data_path: str, start_date: str = '2020-01-01') -> Dict[str, pd.DataFrame]:
     """
     Loads daily OHLCV data using the unified data loader from _get_data,
@@ -585,5 +653,9 @@ def run_strategy_backtest(
     # Attach model for MLflow registration
     metrics['__bst__'] = bst
     metrics['__selected_features__'] = target_symbols
+    
+    # Automatically save performance_report.txt and performance_chart.png at project root
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+    save_backtest_report_and_chart(equity_df, metrics, params, project_root)
     
     return portfolio_weights, equity_df, metrics
