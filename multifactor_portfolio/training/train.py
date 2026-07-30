@@ -540,10 +540,10 @@ def run_strategy_backtest(
     eval_dates = all_dates[all_dates >= eval_start_date]
     target_weights_df = target_weights_df.reindex(eval_dates).fillna(0.0)
     
-    # Use full price history for inverse vol and macro calculation to eliminate 60-day warmup gap on Day 1 of OOS
-    full_underlying_price_df = get_underlying_price_df(data_dict, target_symbols).ffill().bfill()
+    # Raw underlying prices (ONLY forward fill for weekend/holiday gaps, NO bfill artificial backfilling)
+    full_underlying_price_df = get_underlying_price_df(data_dict, target_symbols).ffill()
     full_underlying_returns = full_underlying_price_df.pct_change()
-    underlying_price_df = full_underlying_price_df.reindex(eval_dates).ffill().bfill()
+    underlying_price_df = full_underlying_price_df.reindex(eval_dates).ffill()
     
     print("Calculating inverse volatility risk weighting...")
     full_risk_weights = calculate_inverse_volatility_weighting(
@@ -562,7 +562,8 @@ def run_strategy_backtest(
         max_hist_date = eval_dates.max().strftime('%Y-%m-%d')
         macro_df = download_macro_features(local_data_dir, start_date=min_hist_date, end_date=max_hist_date)
         if not macro_df.empty:
-            macro_df = macro_df.reindex(all_dates).ffill().bfill()
+            # ONLY ffill weekend macro gaps, NO bfill artificial backfilling into past
+            macro_df = macro_df.reindex(all_dates).ffill()
             
             vix_z = (macro_df['vix'] - macro_df['vix'].rolling(120, min_periods=30).mean()) / macro_df['vix'].rolling(120, min_periods=30).std().replace(0, 1)
             fng_z = -(macro_df['fear_greed'] - macro_df['fear_greed'].rolling(120, min_periods=30).mean()) / macro_df['fear_greed'].rolling(120, min_periods=30).std().replace(0, 1)
@@ -604,10 +605,10 @@ def run_strategy_backtest(
                 backend=params.get('backend', 'native_portfolio'),
                 hedge_type=params.get('hedge_type', 'target_weight'),
                 initial_capital=params.get('initial_capital', 100000.0),
-                leverage=params.get('leverage', 1.0),
+                leverage=params.get('leverage', params.get('training', {}).get('leverage', 3.0)),
                 asset_type=params.get('asset_class', 'crypto'),
                 use_funding=params.get('use_funding', False),
-                fee=params.get('fee', 0.0005) * 2.0,
+                fee=params.get('fee', 0.0005),
                 slippage=params.get('slippage', 0.0001),
                 contract_size=1.0,
                 report_level="minimal"
