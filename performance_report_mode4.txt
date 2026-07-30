@@ -8,17 +8,17 @@ Num Boost Rounds: 125
 Leverage: 3.0
 Rebalance Schedule: calendar_3d
 Rebalance Threshold: 0.02
-Inverse Vol Period: 35
+Inverse Vol Period: 14
 Quantiles: 8
 
 --- QUANTBT PORTFOLIO METRICS ---
-Sharpe Ratio: 0.7626
-CAGR (%): 8.67%
-Total Return (%): 72.10%
-Max Drawdown (%): 27.52%
-Profit Factor: 1.2043
-Long Hit Rate (%): 53.17%
-Short Hit Rate (%): 53.53%
+Sharpe Ratio: 1.0565
+CAGR (%): 11.13%
+Total Return (%): 97.86%
+Max Drawdown (%): 16.59%
+Profit Factor: 1.3132
+Long Hit Rate (%): 52.86%
+Short Hit Rate (%): 53.11%
 Number of Trades: 11292
 
 --- ML MODEL EVALUATION METRICS ---

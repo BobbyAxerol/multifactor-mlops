@@ -655,6 +655,17 @@ def run_strategy_backtest(
         print(f"Warning: Failed to apply PA 5.1 Sigmoid Macro Risk Overlay: {e}")
         
     train_cfg = params.get('training', {}) if isinstance(params.get('training'), dict) else {}
+
+    # Idea 3: Volatility Ceiling Risk Scaling (Scale down 50% for high-vol altcoins > vol_ceiling_pct)
+    vol_ceiling_pct = params.get('volatility_ceiling') if params.get('volatility_ceiling') is not None else train_cfg.get('volatility_ceiling', 0.06)
+    if vol_ceiling_pct > 0.0:
+        from src.multifactor_mlops.portfolio.constructor import PortfolioConstructor
+        portfolio_weights = PortfolioConstructor.apply_volatility_ceiling_filter(
+            weights_df=portfolio_weights,
+            data_dict=data_dict,
+            vol_ceiling_pct=vol_ceiling_pct
+        )
+        print(f"Applied Volatility Ceiling Risk Scaling ({vol_ceiling_pct*100:.1f}%).")
     
     allocation_cap = params.get('allocation_cap') if params.get('allocation_cap') is not None else train_cfg.get('allocation_cap', 0.15)
     portfolio_weights = portfolio_weights.clip(lower=-allocation_cap, upper=allocation_cap)

@@ -151,3 +151,39 @@ class PortfolioConstructor:
             raise PortfolioInvariantError(f"Short weights sum is positive: {short_sum}")
         if max_weight > self.allocation_cap + 1e-4:
             raise PortfolioInvariantError(f"Max asset weight ({max_weight}) exceeds allocation cap ({self.allocation_cap})")
+
+    @staticmethod
+    def apply_volatility_ceiling_filter(
+        weights_df: pd.DataFrame,
+        data_dict: Dict[str, pd.DataFrame],
+        vol_ceiling_pct: float = 0.06,
+        vol_window: int = 14
+    ) -> pd.DataFrame:
+        """
+        Idea 3 (Volatility Ceiling Risk Scaling): Reduces sizing by 50% on assets whose 14-day daily
+        return volatility exceeds vol_ceiling_pct (default 6%).
+        """
+        if weights_df.empty or not isinstance(data_dict, dict):
+            return weights_df
+
+        closes = {}
+        for sym in weights_df.columns:
+            if sym in data_dict and not data_dict[sym].empty:
+                df = data_dict[sym]
+                c_col = 'Close' if 'Close' in df.columns else ('close' if 'close' in df.columns else None)
+                if c_col:
+                    closes[sym] = df[c_col]
+
+        if not closes:
+            return weights_df
+
+        close_df = pd.DataFrame(closes).reindex(weights_df.index).ffill()
+        close_df = close_df.reindex(columns=weights_df.columns)
+        daily_returns = close_df.pct_change()
+        rolling_vol = daily_returns.rolling(window=vol_window, min_periods=5).std()
+
+        modified = weights_df.copy()
+        high_vol_mask = (rolling_vol > vol_ceiling_pct).fillna(False)
+        modified = modified.mask(high_vol_mask, modified * 0.5)
+
+        return modified.fillna(0.0)
