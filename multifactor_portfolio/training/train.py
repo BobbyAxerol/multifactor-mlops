@@ -574,7 +574,8 @@ def generate_walk_forward_target_weights(
 def run_strategy_backtest(
     data_dict: Dict[str, pd.DataFrame],
     params: dict,
-    local_data_dir: str
+    local_data_dir: str,
+    save_reports: bool = True
 ) -> Tuple[pd.DataFrame, pd.DataFrame, dict]:
     """
     Executes the complete strategy, fully supporting Walk-Forward Out-Of-Sample validation.
@@ -656,16 +657,18 @@ def run_strategy_backtest(
         
     train_cfg = params.get('training', {}) if isinstance(params.get('training'), dict) else {}
 
-    # Idea 3: Volatility Ceiling Risk Scaling (Scale down 50% for high-vol altcoins > vol_ceiling_pct)
-    vol_ceiling_pct = params.get('volatility_ceiling') if params.get('volatility_ceiling') is not None else train_cfg.get('volatility_ceiling', 0.06)
+    # V2 Choice 1: Dual-Window EWMA Volatility Risk Scaling (max(EWMA5, EWMA20) > vol_ceiling_pct)
+    vol_ceiling_pct = params.get('volatility_ceiling') if params.get('volatility_ceiling') is not None else train_cfg.get('volatility_ceiling', 0.04)
     if vol_ceiling_pct > 0.0:
         from src.multifactor_mlops.portfolio.constructor import PortfolioConstructor
-        portfolio_weights = PortfolioConstructor.apply_volatility_ceiling_filter(
+        portfolio_weights = PortfolioConstructor.apply_ewma_volatility_ceiling_filter(
             weights_df=portfolio_weights,
             data_dict=data_dict,
-            vol_ceiling_pct=vol_ceiling_pct
+            vol_ceiling_pct=vol_ceiling_pct,
+            ewma_fast=5,
+            ewma_slow=20
         )
-        print(f"Applied Volatility Ceiling Risk Scaling ({vol_ceiling_pct*100:.1f}%).")
+        print(f"Applied V2 Dual-Window EWMA Volatility Risk Scaling ({vol_ceiling_pct*100:.1f}%).")
     
     allocation_cap = params.get('allocation_cap') if params.get('allocation_cap') is not None else train_cfg.get('allocation_cap', 0.15)
     portfolio_weights = portfolio_weights.clip(lower=-allocation_cap, upper=allocation_cap)
@@ -730,12 +733,13 @@ def run_strategy_backtest(
     metrics['__bst__'] = bst
     metrics['__selected_features__'] = target_symbols
     
-    # Save mode-specific performance report & chart
-    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-    opt_mode = params.get('optimization_mode', 'mode_4_is_only_robust')
-    split_m = params.get('split_mode', 'train_test_split_2024')
-    prefix = "performance_report_mode5" if (opt_mode == 'mode_5_full_robust' or split_m == 'full') else "performance_report_mode4"
-    save_backtest_report_and_chart(equity_df, metrics, params, project_root, filename_prefix=prefix)
+    # Save mode-specific performance report & chart ONLY when save_reports is True
+    if save_reports:
+        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+        opt_mode = params.get('optimization_mode', 'mode_4_is_only_robust')
+        split_m = params.get('split_mode', 'train_test_split_2024')
+        prefix = "performance_report_mode5" if (opt_mode == 'mode_5_full_robust' or split_m == 'full') else "performance_report_mode4"
+        save_backtest_report_and_chart(equity_df, metrics, params, project_root, filename_prefix=prefix)
     
     return portfolio_weights, equity_df, metrics
 

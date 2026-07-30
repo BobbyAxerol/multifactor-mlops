@@ -92,7 +92,8 @@ class Stage2StrategyOptimizer:
             _, equity_df, metrics = run_strategy_backtest(
                 data_dict=raw_dict,
                 params=trial_params,
-                local_data_dir="./data"
+                local_data_dir="./data",
+                save_reports=False
             )
 
             qbt_sharpe = float(metrics.get("sharpe_ratio", 0.0))

@@ -6,13 +6,13 @@
   "num_boost_round": 125,
   "train_step_days": 4,
   "quantiles": 8,
-  "inverse_vol_period": 14,
+  "inverse_vol_period": 42,
   "rebalance_schedule": "calendar_3d",
-  "rebalance_threshold": 0.02,
-  "allocation_cap": 0.30000000000000004,
-  "volatility_ceiling": 0.04,
-  "stress_vix_threshold": 20.0,
-  "stress_fng_threshold": 20.0,
-  "stress_dvol_threshold": 60.0,
-  "stress_multiplier": 0.8
+  "rebalance_threshold": 0.04,
+  "allocation_cap": 0.2,
+  "volatility_ceiling": 0.05,
+  "stress_vix_threshold": 30.0,
+  "stress_fng_threshold": 40.0,
+  "stress_dvol_threshold": 75.0,
+  "stress_multiplier": 0.5
 }

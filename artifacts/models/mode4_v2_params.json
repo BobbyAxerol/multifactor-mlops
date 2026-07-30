@@ -19,7 +19,7 @@
     "split_mode": "train_test_split_2024",
     "initial_capital": 100000.0,
     "leverage": 3.0,
-    "allocation_cap": 0.20,
+    "allocation_cap": 0.2,
     "volatility_ceiling": 0.05,
     "fee": 0.0005,
     "slippage": 0.0001,

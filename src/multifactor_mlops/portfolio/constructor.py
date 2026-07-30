@@ -187,3 +187,44 @@ class PortfolioConstructor:
         modified = modified.mask(high_vol_mask, modified * 0.5)
 
         return modified.fillna(0.0)
+
+    @staticmethod
+    def apply_ewma_volatility_ceiling_filter(
+        weights_df: pd.DataFrame,
+        data_dict: Dict[str, pd.DataFrame],
+        vol_ceiling_pct: float = 0.04,
+        ewma_fast: int = 5,
+        ewma_slow: int = 20
+    ) -> pd.DataFrame:
+        """
+        V2 Choice 1 (Dual-Window EWMA Volatility Risk Scaling):
+        Computes max(EWMA_fast, EWMA_slow) volatility and scales down position sizes by 50%
+        for assets whose effective volatility exceeds vol_ceiling_pct (default 4%).
+        """
+        if weights_df.empty or not isinstance(data_dict, dict):
+            return weights_df
+
+        closes = {}
+        for sym in weights_df.columns:
+            if sym in data_dict and not data_dict[sym].empty:
+                df = data_dict[sym]
+                c_col = 'Close' if 'Close' in df.columns else ('close' if 'close' in df.columns else None)
+                if c_col:
+                    closes[sym] = df[c_col]
+
+        if not closes:
+            return weights_df
+
+        close_df = pd.DataFrame(closes).reindex(weights_df.index).ffill()
+        close_df = close_df.reindex(columns=weights_df.columns)
+        daily_returns = close_df.pct_change()
+
+        ewma_fast_vol = daily_returns.ewm(span=ewma_fast, min_periods=3).std()
+        ewma_slow_vol = daily_returns.ewm(span=ewma_slow, min_periods=5).std()
+        max_ewma_vol = np.maximum(ewma_fast_vol, ewma_slow_vol)
+
+        modified = weights_df.copy()
+        high_vol_mask = (max_ewma_vol > vol_ceiling_pct).fillna(False)
+        modified = modified.mask(high_vol_mask, modified * 0.5)
+
+        return modified.fillna(0.0)
