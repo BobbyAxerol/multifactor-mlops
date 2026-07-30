@@ -583,21 +583,43 @@ def run_strategy_backtest(
             fng_z = -(macro_df['fear_greed'] - macro_df['fear_greed'].rolling(120, min_periods=30).mean()) / macro_df['fear_greed'].rolling(120, min_periods=30).std().replace(0, 1)
             dvol_z = (macro_df['dvol_btc'] - macro_df['dvol_btc'].rolling(120, min_periods=30).mean()) / macro_df['dvol_btc'].rolling(120, min_periods=30).std().replace(0, 1)
             
+            # Regime-Aware Macro Stress: Scale down exposure ONLY during high volatility + negative market momentum (crash regimes)
+            btc_returns = full_underlying_returns['BTCUSDT'] if 'BTCUSDT' in full_underlying_returns.columns else full_underlying_returns.mean(axis=1)
+            btc_mom = btc_returns.rolling(30, min_periods=10).mean()
+            crash_filter = (btc_mom < 0.0).astype(float).reindex(all_dates).fillna(0.5)
+
             stress_score = (vix_z.fillna(0.0) + fng_z.fillna(0.0) + dvol_z.fillna(0.0)) / 3.0
             
-            # Sigmoid smooth exposure scaling: 1 / (1 + exp(1.5 * (stress_score - 0.5)))
-            regime_multiplier = 1.0 / (1.0 + np.exp(1.5 * (stress_score - 0.5)))
-            regime_multiplier = regime_multiplier.clip(lower=0.2, upper=1.0)
+            # Exposure multiplier decreases ONLY when stress is high AND market is in crash mode
+            effective_stress = stress_score * crash_filter
+            regime_multiplier = 1.0 / (1.0 + np.exp(1.5 * (effective_stress - 0.5)))
+            stress_mult_floor = params.get('stress_multiplier', 0.4)
+            regime_multiplier = regime_multiplier.clip(lower=stress_mult_floor, upper=1.0)
             
             eval_multiplier = regime_multiplier.reindex(eval_dates).fillna(1.0)
             portfolio_weights = portfolio_weights.mul(eval_multiplier, axis=0)
-            print(f"Applied PA 5.1 Sigmoid Exposure Scaling. Mean exposure multiplier: {eval_multiplier.mean():.4f}")
+            print(f"Applied Regime-Aware Sigmoid Exposure Scaling. Mean exposure multiplier: {eval_multiplier.mean():.4f}")
     except Exception as e:
         print(f"Warning: Failed to apply PA 5.1 Sigmoid Macro Risk Overlay: {e}")
         
-    allocation_cap = params.get('allocation_cap', 0.2)
+    allocation_cap = params.get('allocation_cap', 0.15)
     portfolio_weights = portfolio_weights.clip(lower=-allocation_cap, upper=allocation_cap)
     
+    # Rebalance Drift Threshold Filter: Only rebalance if weight drift >= threshold (reduces trade turnover friction)
+    rebalance_thresh = params.get('rebalance_threshold', 0.03)
+    if rebalance_thresh > 0.0 and not portfolio_weights.empty:
+        filtered_weights = portfolio_weights.copy()
+        prev_row = filtered_weights.iloc[0].copy()
+        for idx in range(1, len(filtered_weights)):
+            curr_row = filtered_weights.iloc[idx].copy()
+            drift = (curr_row - prev_row).abs()
+            no_rebalance_mask = drift < rebalance_thresh
+            curr_row[no_rebalance_mask] = prev_row[no_rebalance_mask]
+            filtered_weights.iloc[idx] = curr_row
+            prev_row = curr_row
+        portfolio_weights = filtered_weights
+        print(f"Applied Rebalance Drift Threshold Filter ({rebalance_thresh*100:.1f}%).")
+
     print("Running portfolio backtest via QuantBT Endpoint...")
     from src.multifactor_mlops.backtest import QuantBTRunner, QuantBTExecutionError
     from src.multifactor_mlops.config import load_config

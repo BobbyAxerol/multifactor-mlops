@@ -5,11 +5,12 @@
   "subsample": 0.8,
   "num_boost_round": 125,
   "train_step_days": 4,
-  "quantiles": 40,
-  "inverse_vol_period": 150,
-  "allocation_cap": 0.15000000000000002,
-  "stress_vix_threshold": 18.0,
-  "stress_fng_threshold": 30.0,
-  "stress_dvol_threshold": 55.0,
-  "stress_multiplier": 0.4
+  "quantiles": 4,
+  "inverse_vol_period": 21,
+  "rebalance_threshold": 0.05,
+  "allocation_cap": 0.1,
+  "stress_vix_threshold": 22.0,
+  "stress_fng_threshold": 20.0,
+  "stress_dvol_threshold": 60.0,
+  "stress_multiplier": 0.5
 }

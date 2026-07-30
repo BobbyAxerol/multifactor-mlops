@@ -57,9 +57,10 @@ class Stage2StrategyOptimizer:
         """
         Evaluates trial strategy parameters strictly on Mode 4 IS folds via QuantBTRunner.
         """
-        quantiles = trial.suggest_int("quantiles", 10, 50, step=5)
-        inverse_vol_period = trial.suggest_int("inverse_vol_period", 60, 210, step=30)
-        allocation_cap = trial.suggest_float("allocation_cap", 0.10, 0.45, step=0.05)
+        quantiles = trial.suggest_int("quantiles", 4, 20, step=2)
+        inverse_vol_period = trial.suggest_int("inverse_vol_period", 14, 45, step=7)
+        rebalance_thresh = trial.suggest_float("rebalance_threshold", 0.01, 0.05, step=0.01)
+        allocation_cap = trial.suggest_float("allocation_cap", 0.10, 0.35, step=0.05)
         stress_vix = trial.suggest_float("stress_vix_threshold", 18.0, 30.0, step=2.0)
         stress_fng = trial.suggest_float("stress_fng_threshold", 20.0, 40.0, step=5.0)
         stress_dvol = trial.suggest_float("stress_dvol_threshold", 50.0, 75.0, step=5.0)
@@ -70,6 +71,7 @@ class Stage2StrategyOptimizer:
         trial_params.update({
             "quantiles": quantiles,
             "inverse_vol_period": inverse_vol_period,
+            "rebalance_threshold": rebalance_thresh,
             "allocation_cap": allocation_cap,
             "stress_vix_threshold": stress_vix,
             "stress_fng_threshold": stress_fng,

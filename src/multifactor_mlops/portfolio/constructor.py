@@ -32,12 +32,16 @@ class PortfolioConstructor:
     def create_cross_sectional_weights(self, predictions_df: pd.DataFrame) -> pd.DataFrame:
         """
         Calculates cross-sectional quantile binning to produce raw market-neutral target signs/weights.
-        Long top quantile (+1.0), Short bottom quantile (-1.0).
+        Long top percentile (+1.0 / count), Short bottom percentile (-1.0 / count).
         """
         predictions_clean = predictions_df.replace([np.inf, -np.inf], np.nan)
         rank_pct = predictions_clean.rank(axis=1, pct=True, method="first")
 
-        top_pct = 1.0 / max(float(self.quantiles), 2.0)
+        num_assets = len(predictions_df.columns)
+        if num_assets <= 4:
+            top_pct = 0.5
+        else:
+            top_pct = min(0.25, max(0.05, 1.0 / float(self.quantiles)))
         long_mask = rank_pct > (1.0 - top_pct)
         short_mask = rank_pct <= top_pct
 
@@ -46,7 +50,13 @@ class PortfolioConstructor:
         if self.portfolio_mode == "longshort":
             raw_weights[short_mask] = -1.0
 
-        return raw_weights.fillna(0.0)
+        long_counts = (raw_weights > 0).sum(axis=1).replace(0, 1)
+        short_counts = (raw_weights < 0).sum(axis=1).replace(0, 1)
+
+        long_part = raw_weights.clip(lower=0.0).div(long_counts, axis=0)
+        short_part = raw_weights.clip(upper=0.0).div(short_counts, axis=0)
+
+        return (long_part + short_part).fillna(0.0)
 
     def apply_risk_weights_and_constraints(
         self,
