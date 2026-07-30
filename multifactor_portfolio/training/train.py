@@ -306,7 +306,8 @@ def generate_walk_forward_target_weights(
         _ = temp_engine.calculate_market_cap_proxy(klines_all, top_n=top_n)
         target_symbols = temp_engine.symbols
         
-        start_date = str(klines_all.index.get_level_values('time').min().strftime('%Y-%m-%d'))
+        times_list = [t for t in klines_all.index.get_level_values('time') if pd.notna(t)] if not klines_all.empty else []
+        start_date = pd.Timestamp(min(times_list)).strftime('%Y-%m-%d') if times_list else "2020-01-01"
         futures_data = download_missing_data(
             symbols=target_symbols,
             data_dir=local_data_dir,
@@ -371,12 +372,15 @@ def generate_walk_forward_target_weights(
     folds = split_info['folds']
     
     if not folds:
+        if split_mode != 'full':
+            raise ValueError(f"Unsupported or empty split_mode '{split_mode}'. Cannot generate walk-forward folds.")
         params_copy = params.copy()
         params_copy['split_mode'] = 'full'
         return generate_walk_forward_target_weights(data_dict, params_copy, local_data_dir, all_dates)
         
     from multifactor_portfolio.util.macro_collector import download_macro_features
-    min_date = all_dates.min().strftime('%Y-%m-%d')
+    clean_all_dates_list = [d for d in all_dates if pd.notna(d)]
+    min_date = pd.Timestamp(min(clean_all_dates_list)).strftime('%Y-%m-%d') if clean_all_dates_list else "2020-01-01"
     print("Downloading global macro features...")
     global_macro_df = download_macro_features(local_data_dir, start_date=min_date)
 
@@ -415,7 +419,8 @@ def generate_walk_forward_target_weights(
         all_active_symbols.update(target_symbols)
         
         # 2. Get funding rates up to test_end
-        start_date = str(klines_all_fold.index.get_level_values('time').min().strftime('%Y-%m-%d'))
+        times_fold_list = [t for t in klines_all_fold.index.get_level_values('time') if pd.notna(t)] if not klines_all_fold.empty else []
+        start_date = pd.Timestamp(min(times_fold_list)).strftime('%Y-%m-%d') if times_fold_list else "2020-01-01"
         futures_data = download_missing_data(
             symbols=target_symbols,
             data_dir=local_data_dir,
@@ -424,7 +429,8 @@ def generate_walk_forward_target_weights(
         
         funding_fold = futures_data['funding'].loc[:test_end]
         macro_fold = global_macro_df.loc[:test_end]
-        train_end = train_dict[next(iter(train_dict))].index.max()
+        valid_train_dates = [df.index.max() for df in train_dict.values() if not df.empty and len(df.index) > 0]
+        train_end = max(valid_train_dates) if valid_train_dates else test_end
         
         # 3. Prepare Train panel dataset
         panel_train = CrossSectionalFactorEngine.prepare_panel_dataset(
@@ -443,6 +449,10 @@ def generate_walk_forward_target_weights(
             sampled_train_dates = unique_train_dates[::train_step_days]
             panel_train = panel_train[panel_train.index.get_level_values('Time').isin(sampled_train_dates)]
             print(f"Downsampled training panel from {len(unique_train_dates)} to {len(sampled_train_dates)} dates using step {train_step_days} days.")
+            
+        if panel_train.empty:
+            print(f"Warning: Fold {label} panel_train is empty. Skipping fold.")
+            continue
             
         X_train = panel_train[selected_features].fillna(0.0)
         y_train = panel_train['target']
@@ -505,6 +515,8 @@ def generate_walk_forward_target_weights(
         fold_weights_list.append(final_weights_fold)
         
     # Combine out-of-sample weights
+    if not fold_weights_list:
+        raise ValueError("No valid walk-forward folds produced non-empty target weights.")
     oos_weights_df = pd.concat(fold_weights_list, axis=0).sort_index().fillna(0.0)
     first_test_start = folds[0]['test'][next(iter(folds[0]['test']))].index.min()
     
@@ -558,8 +570,10 @@ def run_strategy_backtest(
     try:
         from multifactor_portfolio.util.macro_collector import download_macro_features
         print("Applying PA 5.1 Sigmoid Continuous Macro-Regime Risk Overlay...")
-        min_hist_date = all_dates.min().strftime('%Y-%m-%d')
-        max_hist_date = eval_dates.max().strftime('%Y-%m-%d')
+        clean_all_dates = [d for d in all_dates if pd.notna(d)]
+        clean_eval_dates = [d for d in eval_dates if pd.notna(d)]
+        min_hist_date = pd.Timestamp(min(clean_all_dates)).strftime('%Y-%m-%d') if clean_all_dates else "2020-01-01"
+        max_hist_date = pd.Timestamp(max(clean_eval_dates)).strftime('%Y-%m-%d') if clean_eval_dates else "2026-07-29"
         macro_df = download_macro_features(local_data_dir, start_date=min_hist_date, end_date=max_hist_date)
         if not macro_df.empty:
             # ONLY ffill weekend macro gaps, NO bfill artificial backfilling into past
