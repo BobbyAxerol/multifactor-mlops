@@ -237,6 +237,19 @@ def split_data(
                 test_dict = {sym: df[(df.index.year == y) & (((df.index.month - 1) // 3 + 1) == q)] for sym, df in data_dict.items()}
                 folds.append({"train": train_dict, "test": test_dict, "label": f"{y}-Q{q}"})
                 
+    elif split_mode.startswith('train_test_split_'):
+        try:
+            split_year = int(split_mode.split('_')[-1])
+        except ValueError:
+            split_year = 2024
+        split_date = pd.Timestamp(f"{split_year}-01-01")
+        test_dates = all_dates[all_dates >= split_date]
+        if not test_dates.empty:
+            train_end = split_date - pd.Timedelta(days=target_window)
+            train_dict = {sym: df[df.index <= train_end] for sym, df in data_dict.items()}
+            test_dict = {sym: df[df.index >= split_date] for sym, df in data_dict.items()}
+            folds.append({"train": train_dict, "test": test_dict, "label": f"{split_year}_OOS"})
+                
     return {
         "mode": "walk_forward",
         "folds": folds,
