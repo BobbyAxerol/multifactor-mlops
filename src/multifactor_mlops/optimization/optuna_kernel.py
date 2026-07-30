@@ -46,19 +46,33 @@ class NestedWFOptunaOptimizer:
         Never touches outer-test data.
         """
         # Sample hyperparameters
-        lr = trial.suggest_float("learning_rate", 0.01, 0.08, step=0.01)
-        max_depth = trial.suggest_int("max_depth", 2, 5)
+        lr = trial.suggest_float("learning_rate", 0.01, 0.10, step=0.01)
+        max_depth = trial.suggest_int("max_depth", 2, 6)
+        colsample_bytree = trial.suggest_float("colsample_bytree", 0.2, 0.8, step=0.1)
+        subsample = trial.suggest_float("subsample", 0.5, 1.0, step=0.1)
+        num_boost_round = trial.suggest_int("num_boost_round", 50, 200, step=25)
+        train_step_days = trial.suggest_int("train_step_days", 1, 5)
         quantiles = trial.suggest_int("quantiles", 10, 50, step=5)
         inverse_vol_period = trial.suggest_int("inverse_vol_period", 60, 210, step=30)
         allocation_cap = trial.suggest_float("allocation_cap", 0.10, 0.45, step=0.05)
+        stress_vix = trial.suggest_float("stress_vix_threshold", 18.0, 30.0, step=2.0)
+        stress_fng = trial.suggest_float("stress_fng_threshold", 20.0, 40.0, step=5.0)
+        stress_dvol = trial.suggest_float("stress_dvol_threshold", 50.0, 75.0, step=5.0)
 
         trial_params = base_params.copy()
         trial_params.update({
             "learning_rate": lr,
             "max_depth": max_depth,
+            "colsample_bytree": colsample_bytree,
+            "subsample": subsample,
+            "num_boost_round": num_boost_round,
+            "train_step_days": train_step_days,
             "quantiles": quantiles,
             "inverse_vol_period": inverse_vol_period,
             "allocation_cap": allocation_cap,
+            "stress_vix_threshold": stress_vix,
+            "stress_fng_threshold": stress_fng,
+            "stress_dvol_threshold": stress_dvol,
             "scoring_backend": "endpoint",
             "backend": "native_portfolio"
         })
