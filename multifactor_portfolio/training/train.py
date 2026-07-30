@@ -74,29 +74,55 @@ def calculate_ml_evaluation_metrics(y_true: pd.Series, y_pred: np.ndarray, index
         'ml_mse': round(float(mse), 6)
     }
 
-def save_backtest_report_and_chart(equity_df: pd.DataFrame, metrics: dict, params: dict, output_dir: str):
+def save_backtest_report_and_chart(
+    equity_df: pd.DataFrame,
+    metrics: dict,
+    params: dict,
+    output_dir: str,
+    filename_prefix: str = "performance"
+):
     """
-    Saves performance_report.txt and performance_chart.png in output_dir whenever backtest is run.
+    Saves mode-specific performance_report_modeX.txt and performance_chart_modeX.png in output_dir.
+    All metrics are directly exported from QuantBT backtest results.
     """
     import os
     import matplotlib.pyplot as plt
     os.makedirs(output_dir, exist_ok=True)
-    
-    # 1. Save performance_report.txt
-    txt_path = os.path.join(output_dir, "performance_report.txt")
+
+    if filename_prefix.startswith("performance_report_"):
+        txt_filename = f"{filename_prefix}.txt"
+        chart_filename = f"{filename_prefix.replace('_report_', '_chart_')}.png"
+    elif filename_prefix == "performance":
+        txt_filename = "performance_report.txt"
+        chart_filename = "performance_chart.png"
+    else:
+        txt_filename = f"{filename_prefix}_report.txt"
+        chart_filename = f"{filename_prefix}_chart.png"
+
+    txt_path = os.path.join(output_dir, txt_filename)
+    chart_path = os.path.join(output_dir, chart_filename)
+
     with open(txt_path, "w") as f:
-        f.write("=== MULTI-FACTOR MACRO STRATEGY PERFORMANCE REPORT ===\n\n")
+        f.write("=== MULTI-FACTOR MACRO STRATEGY PERFORMANCE REPORT (QUANTBT EXPORT) ===\n\n")
+        f.write(f"Report File: {txt_filename}\n")
         f.write(f"Model Type: {params.get('model_type', params.get('features', {}).get('model_type', 'xgboost'))}\n")
-        f.write(f"Learning Rate: {params.get('learning_rate', params.get('features', {}).get('learning_rate', 0.04))}\n")
-        f.write(f"Max Depth: {params.get('max_depth', params.get('features', {}).get('max_depth', 4))}\n")
-        f.write(f"Num Boost Rounds: {params.get('num_boost_round', params.get('features', {}).get('num_boost_round', 100))}\n")
+        f.write(f"Learning Rate: {params.get('learning_rate', params.get('features', {}).get('learning_rate', 0.02))}\n")
+        f.write(f"Max Depth: {params.get('max_depth', params.get('features', {}).get('max_depth', 6))}\n")
+        f.write(f"Num Boost Rounds: {params.get('num_boost_round', params.get('features', {}).get('num_boost_round', 125))}\n")
         f.write(f"Leverage: {params.get('leverage', 3.0)}\n")
-        f.write(f"Inverse Vol Period: {params.get('inverse_vol_period', 60)}\n")
-        f.write(f"Quantiles: {params.get('quantiles', 20)}\n\n")
-        f.write("--- PORTFOLIO METRICS ---\n")
+        f.write(f"Rebalance Schedule: {params.get('rebalance_schedule', 'calendar_3d')}\n")
+        f.write(f"Rebalance Threshold: {params.get('rebalance_threshold', 0.02)}\n")
+        f.write(f"Inverse Vol Period: {params.get('inverse_vol_period', 35)}\n")
+        f.write(f"Quantiles: {params.get('quantiles', 8)}\n\n")
+        f.write("--- QUANTBT PORTFOLIO METRICS ---\n")
         f.write(f"Sharpe Ratio: {metrics.get('sharpe_ratio', 0.0):.4f}\n")
-        f.write(f"CAGR: {metrics.get('cagr', 0.0)*100:.2f}%\n")
-        f.write(f"Max Drawdown: {metrics.get('max_drawdown', 0.0)*100:.2f}%\n\n")
+        f.write(f"CAGR (%): {metrics.get('cagr_pct', metrics.get('cagr', 0.0)*100):.2f}%\n")
+        f.write(f"Total Return (%): {metrics.get('total_return_pct', 0.0):.2f}%\n")
+        f.write(f"Max Drawdown (%): {metrics.get('max_drawdown_pct', metrics.get('max_drawdown', 0.0)*100):.2f}%\n")
+        f.write(f"Profit Factor: {metrics.get('profit_factor', 0.0):.4f}\n")
+        f.write(f"Long Hit Rate (%): {metrics.get('long_hitrate_pct', 0.0):.2f}%\n")
+        f.write(f"Short Hit Rate (%): {metrics.get('short_hitrate_pct', 0.0):.2f}%\n")
+        f.write(f"Number of Trades: {metrics.get('num_trades', 0)}\n\n")
         f.write("--- ML MODEL EVALUATION METRICS ---\n")
         f.write(f"Sign Direction Accuracy: {metrics.get('ml_accuracy', 0.0)*100:.2f}%\n")
         f.write(f"Precision: {metrics.get('ml_precision', 0.0)*100:.2f}%\n")
@@ -106,21 +132,27 @@ def save_backtest_report_and_chart(equity_df: pd.DataFrame, metrics: dict, param
         f.write(f"IC IR: {metrics.get('ml_ic_ir', 0.0):.4f}\n")
         f.write(f"R2 Explanatory Power: {metrics.get('ml_r2_score', 0.0)*100:.2f}%\n")
         f.write(f"MSE: {metrics.get('ml_mse', 0.0):.6f}\n")
-        
+
+    # If saving mode4 report, also update default performance_report.txt
+    if filename_prefix == "performance_report_mode4":
+        def_txt = os.path.join(output_dir, "performance_report.txt")
+        with open(def_txt, "w") as f:
+            with open(txt_path, "r") as rf:
+                f.write(rf.read())
+
     # 2. Save performance_chart.png
-    chart_path = os.path.join(output_dir, "performance_chart.png")
     try:
         fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 8), sharex=False, gridspec_kw={'height_ratios': [2.5, 1]})
-        
-        ax1.plot(equity_df['time'], equity_df['equity'], label=f'Strategy Equity (Sharpe: {metrics.get("sharpe_ratio", 0.0):.2f}, CAGR: {metrics.get("cagr", 0.0)*100:.1f}%)', color='#00d26a', linewidth=2.0)
-        ax1.set_title('Multi-Factor Macro Strategy Performance', fontsize=14, fontweight='bold', pad=12)
+
+        ax1.plot(equity_df['time'], equity_df['equity'], label=f'Strategy Equity (Sharpe: {metrics.get("sharpe_ratio", 0.0):.2f}, CAGR: {metrics.get("cagr_pct", metrics.get("cagr", 0.0)*100):.1f}%)', color='#00d26a', linewidth=2.0)
+        ax1.set_title(f'Multi-Factor Macro Strategy Performance ({filename_prefix})', fontsize=14, fontweight='bold', pad=12)
         ax1.set_ylabel('Equity (Rebased 1.0)', fontsize=11, fontweight='bold')
         ax1.legend(loc='upper left', frameon=True, facecolor='#1e1e1e', labelcolor='white')
         ax1.set_facecolor('#141414')
 
         cum_max = equity_df['equity'].cummax()
         dd = (equity_df['equity'] / cum_max) - 1.0
-        ax2.fill_between(equity_df['time'], dd, 0, color='#ff4d4d', alpha=0.5, label=f'Max Drawdown ({metrics.get("max_drawdown", 0.0)*100:.1f}%)')
+        ax2.fill_between(equity_df['time'], dd, 0, color='#ff4d4d', alpha=0.5, label=f'Max Drawdown ({metrics.get("max_drawdown_pct", metrics.get("max_drawdown", 0.0)*100):.1f}%)')
         ax2.set_title('Drawdown Profile', fontsize=12, fontweight='bold', pad=8)
         ax2.set_ylabel('Drawdown', fontsize=11, fontweight='bold')
         ax2.legend(loc='lower left', frameon=True, facecolor='#1e1e1e', labelcolor='white')
@@ -136,8 +168,16 @@ def save_backtest_report_and_chart(equity_df: pd.DataFrame, metrics: dict, param
 
         plt.tight_layout()
         plt.savefig(chart_path, dpi=300, facecolor=fig.get_facecolor(), edgecolor='none')
+
+        if filename_prefix == "performance_report_mode4":
+            def_chart = os.path.join(output_dir, "performance_chart.png")
+            plt.savefig(def_chart, dpi=300, facecolor=fig.get_facecolor(), edgecolor='none')
+
         plt.close()
-        print(f"Automatically saved report to: {txt_path}")
+        print(f"Saved QuantBT report to: {txt_path}")
+        print(f"Saved QuantBT chart to: {chart_path}")
+    except Exception as e:
+        print(f"Notice: Failed to save chart {chart_filename}: {e}")
         print(f"Automatically saved chart to: {chart_path}")
     except Exception as err:
         print(f"Warning: Failed to generate performance chart: {err}")
@@ -679,9 +719,12 @@ def run_strategy_backtest(
     metrics['__bst__'] = bst
     metrics['__selected_features__'] = target_symbols
     
-    # Automatically save performance_report.txt and performance_chart.png at project root
+    # Save mode-specific performance report & chart
     project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-    save_backtest_report_and_chart(equity_df, metrics, params, project_root)
+    opt_mode = params.get('optimization_mode', 'mode_4_is_only_robust')
+    split_m = params.get('split_mode', 'train_test_split_2024')
+    prefix = "performance_report_mode5" if (opt_mode == 'mode_5_full_robust' or split_m == 'full') else "performance_report_mode4"
+    save_backtest_report_and_chart(equity_df, metrics, params, project_root, filename_prefix=prefix)
     
     return portfolio_weights, equity_df, metrics
 
@@ -693,23 +736,42 @@ def run_dual_mode_backtest(
     """
     Executes backtests for both Mode 4 (Walk-Forward OOS) and Mode 5 (Full-Sample)
     and formats a synchronous QuantBT comparative report.
+    Mode 4 uses current tuned parameters from parameters.json.
+    Mode 5 uses baseline parameters.
     """
     print("\n====================================================")
     print("   EXECUTING DUAL-MODE BACKTEST (MODE 4 & MODE 5)   ")
     print("====================================================\n")
 
-    # Mode 4: Walk-Forward OOS
+    # Mode 4: Walk-Forward OOS (Tuned Parameters from parameters.json)
     params_mode4 = params.copy()
     params_mode4['split_mode'] = 'train_test_split_2024'
     params_mode4['optimization_mode'] = 'mode_4_is_only_robust'
     print("--- Running Mode 4 (Walk-Forward OOS: 2024 - 2026) ---")
     weights_m4, equity_m4, metrics_m4 = run_strategy_backtest(data_dict, params_mode4, local_data_dir)
 
-    # Mode 5: Full-Sample
-    params_mode5 = params.copy()
-    params_mode5['split_mode'] = 'full'
-    params_mode5['optimization_mode'] = 'mode_5_full_robust'
-    print("\n--- Running Mode 5 (Full-Sample: 2020 - 2026) ---")
+    # Mode 5: Full-Sample (Baseline Parameters)
+    params_mode5 = {
+        'model_type': 'xgboost',
+        'learning_rate': 0.05,
+        'max_depth': 4,
+        'num_boost_round': 100,
+        'colsample_bytree': 0.3,
+        'subsample': 1.0,
+        'train_step_days': 1,
+        'split_mode': 'full',
+        'optimization_mode': 'mode_5_full_robust',
+        'quantiles': 20,
+        'inverse_vol_period': 60,
+        'rebalance_schedule': 'daily',
+        'rebalance_threshold': 0.0,
+        'allocation_cap': 0.25,
+        'stress_multiplier': 0.5,
+        'leverage': 3.0,
+        'initial_capital': 100000.0,
+        'quantbt_repo_path': params.get('quantbt_repo_path', '/root/bobby/pool_alpha/quantbt')
+    }
+    print("\n--- Running Mode 5 (Full-Sample Baseline: 2020 - 2026) ---")
     weights_m5, equity_m5, metrics_m5 = run_strategy_backtest(data_dict, params_mode5, local_data_dir)
 
     print("\n====================================================")
