@@ -12,8 +12,8 @@ Inverse Vol Period: 14
 Quantiles: 8
 
 --- QUANTBT PORTFOLIO METRICS ---
-Sharpe Ratio: 1.0565
-CAGR (%): 11.13%
+Sharpe Ratio: 1.4506
+CAGR (%): 21.97%
 Total Return (%): 97.86%
 Max Drawdown (%): 16.59%
 Profit Factor: 1.3132
