@@ -154,7 +154,7 @@ class MultifactorPortfolioModelWrapper(mlflow.pyfunc.PythonModel):
         # Apply Macro-Regime Risk Overlay during inference
         try:
             if not macro_df.empty:
-                macro_df_aligned = macro_df.reindex(portfolio_weights.index).ffill().bfill()
+                macro_df_aligned = macro_df.reindex(portfolio_weights.index).ffill()
                 vix_ma = macro_df_aligned['vix'].rolling(14, min_periods=1).mean()
                 fng_ma = macro_df_aligned['fear_greed'].rolling(14, min_periods=1).mean()
                 dvol_ma = macro_df_aligned['dvol_btc'].rolling(14, min_periods=1).mean()

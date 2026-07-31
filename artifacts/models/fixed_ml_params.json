@@ -1,0 +1,8 @@
+{
+  "learning_rate": 0.06999999999999999,
+  "max_depth": 5,
+  "colsample_bytree": 0.30000000000000004,
+  "subsample": 0.8,
+  "num_boost_round": 100,
+  "train_step_days": 4
+}

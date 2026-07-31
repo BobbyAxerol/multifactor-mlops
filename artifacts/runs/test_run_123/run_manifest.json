@@ -1,0 +1,9 @@
+{
+  "run_id": "test_run_123",
+  "artifacts": {
+    "predictions": "/root/bobby/pool_alpha/MLops/multifactor_portfo/artifacts/runs/test_run_123/predictions.parquet"
+  },
+  "checksums": {
+    "predictions": "c074bf5e5ae4eeb122905b9d4aec8926f4067a110fc444ae97d7493124b3622c"
+  }
+}
