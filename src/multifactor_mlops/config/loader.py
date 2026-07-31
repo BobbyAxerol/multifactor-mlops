@@ -36,3 +36,22 @@ def load_config(config_input: Union[str, Dict[str, Any]]) -> AppConfig:
         "model": raw_data.get("model", raw_data)
     }
     return AppConfig.model_validate(flat_data)
+
+def flatten_params(params: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Flattens nested parameter sections (features, dataset, training) into top-level key-value pairs.
+    Top-level explicit keys override sub-dictionary keys.
+    """
+    if not isinstance(params, dict):
+        return {}
+
+    flat = {}
+    for section in ['dataset', 'features', 'training', 'model', 'portfolio', 'backtest', 'validation', 'data']:
+        if section in params and isinstance(params[section], dict):
+            flat.update(params[section])
+
+    for k, v in params.items():
+        if k not in ['dataset', 'features', 'training', 'model', 'portfolio', 'backtest', 'validation', 'data']:
+            flat[k] = v
+
+    return flat

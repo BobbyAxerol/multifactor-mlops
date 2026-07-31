@@ -62,6 +62,7 @@ class Stage2StrategyOptimizer:
         rebalance_schedule = trial.suggest_categorical("rebalance_schedule", ["calendar_3d", "calendar_5d", "weekly_friday_exit"])
         rebalance_thresh = trial.suggest_float("rebalance_threshold", 0.01, 0.05, step=0.01)
         allocation_cap = trial.suggest_float("allocation_cap", 0.10, 0.35, step=0.05)
+        vol_ceiling = trial.suggest_float("volatility_ceiling", 0.04, 0.10, step=0.01)
         stress_vix = trial.suggest_float("stress_vix_threshold", 18.0, 30.0, step=2.0)
         stress_fng = trial.suggest_float("stress_fng_threshold", 20.0, 40.0, step=5.0)
         stress_dvol = trial.suggest_float("stress_dvol_threshold", 50.0, 75.0, step=5.0)
@@ -75,12 +76,13 @@ class Stage2StrategyOptimizer:
             "rebalance_schedule": rebalance_schedule,
             "rebalance_threshold": rebalance_thresh,
             "allocation_cap": allocation_cap,
+            "volatility_ceiling": vol_ceiling,
             "stress_vix_threshold": stress_vix,
             "stress_fng_threshold": stress_fng,
             "stress_dvol_threshold": stress_dvol,
             "stress_multiplier": stress_mult,
-            "split_mode": "train_test_split_2024",
-            "optimization_mode": "mode_4_is_only_robust",
+            "split_mode": base_params.get("split_mode", "walk_forward_quarterly"),
+            "optimization_mode": base_params.get("optimization_mode", "mode_4_is_only_robust"),
             "scoring_backend": "endpoint",
             "backend": "native_portfolio"
         })
@@ -90,7 +92,8 @@ class Stage2StrategyOptimizer:
             _, equity_df, metrics = run_strategy_backtest(
                 data_dict=raw_dict,
                 params=trial_params,
-                local_data_dir="./data"
+                local_data_dir="./data",
+                save_reports=False
             )
 
             qbt_sharpe = float(metrics.get("sharpe_ratio", 0.0))

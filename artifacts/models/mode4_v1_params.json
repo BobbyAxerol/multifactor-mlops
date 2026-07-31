@@ -1,13 +1,12 @@
 {
   "features": {
     "model_type": "xgboost",
-    "learning_rate": 0.07,
-    "max_depth": 5,
+    "learning_rate": 0.02,
+    "max_depth": 6,
     "num_leaves": 15,
-    "num_boost_round": 100,
-    "colsample_bytree": 0.3,
-    "subsample": 0.8,
-    "train_step_days": 4
+    "num_boost_round": 125,
+    "colsample_bytree": 0.6,
+    "subsample": 0.8
   },
   "dataset": {
     "asset_class": "crypto",
@@ -17,30 +16,30 @@
     "quantbt_repo_path": "/root/bobby/pool_alpha/quantbt"
   },
   "training": {
-    "split_mode": "walk_forward_quarterly",
+    "split_mode": "train_test_split_2024",
     "initial_capital": 100000.0,
     "leverage": 3.0,
-    "allocation_cap": 0.25,
-    "volatility_ceiling": 0.08,
+    "allocation_cap": 0.3,
+    "volatility_ceiling": 0.04,
     "fee": 0.0005,
     "slippage": 0.0001,
     "lag": 1,
-    "quantiles": 16,
+    "quantiles": 8,
     "trading_days_per_year": 365,
     "train_step_days": 4,
-    "inverse_vol_period": 42,
-    "rebalance_schedule": "weekly_friday_exit",
-    "rebalance_threshold": 0.05,
-    "stress_vix_threshold": 26.0,
+    "inverse_vol_period": 14,
+    "rebalance_schedule": "calendar_3d",
+    "rebalance_threshold": 0.02,
+    "stress_vix_threshold": 20.0,
     "stress_fng_threshold": 20.0,
-    "stress_dvol_threshold": 50.0,
-    "stress_multiplier": 0.4,
+    "stress_dvol_threshold": 60.0,
+    "stress_multiplier": 0.8,
     "backend": "native_portfolio",
     "portfolio_mode": "longshort",
     "hedge_type": "target_weight"
   },
   "optimization": {
-    "split_mode": "walk_forward_quarterly",
+    "split_mode": "train_test_split_2024",
     "split_frequency": "single",
     "start_year": 2024,
     "n_trials": 50,
@@ -48,7 +47,6 @@
     "optimization_mode": "mode_4_is_only_robust",
     "random_seed": 42,
     "_available_split_modes": [
-      "walk_forward_quarterly",
       "train_test_split_2024",
       "walk_forward_2023",
       "walk_forward_2024"

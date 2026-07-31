@@ -1,0 +1,32 @@
+=== MULTI-FACTOR MACRO STRATEGY PERFORMANCE REPORT (QUANTBT EXPORT) ===
+
+Report File: performance_report_mode5.txt
+Model Type: xgboost
+Learning Rate: 0.05
+Max Depth: 4
+Num Boost Rounds: 100
+Leverage: 3.0
+Rebalance Schedule: daily
+Rebalance Threshold: 0.0
+Inverse Vol Period: 60
+Quantiles: 20
+
+--- QUANTBT PORTFOLIO METRICS ---
+Sharpe Ratio: 1.5331
+CAGR (%): 45.31%
+Total Return (%): 798.93%
+Max Drawdown (%): 40.09%
+Profit Factor: 1.3005
+Long Hit Rate (%): 50.99%
+Short Hit Rate (%): 50.68%
+Number of Trades: 13143
+
+--- ML MODEL EVALUATION METRICS ---
+Sign Direction Accuracy: 54.83%
+Precision: 46.21%
+Recall: 24.54%
+F1-Score: 0.3205
+Rank IC (Spearman): 0.0324
+IC IR: 0.1199
+R2 Explanatory Power: 14.99%
+MSE: 0.002197
