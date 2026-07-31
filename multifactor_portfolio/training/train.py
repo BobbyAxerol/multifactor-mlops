@@ -277,6 +277,23 @@ def split_data(
                 test_dict = {sym: df[(df.index.year == y) & (((df.index.month - 1) // 3 + 1) == q)] for sym, df in data_dict.items()}
                 folds.append({"train": train_dict, "test": test_dict, "label": f"{y}-Q{q}"})
                 
+    elif split_mode == 'walk_forward_2024_90d':
+        dates_oos = all_dates[all_dates >= pd.Timestamp('2024-01-01')]
+        unique_quarters = sorted(list(set((t.year, (t.month - 1) // 3 + 1) for t in dates_oos)))
+        for y, q in unique_quarters:
+            test_dates = all_dates[(all_dates.year == y) & (((all_dates.month - 1) // 3 + 1) == q)]
+            if not test_dates.empty:
+                train_end = test_dates.min() - pd.Timedelta(days=target_window)
+                train_dict = {sym: df[df.index <= train_end] for sym, df in data_dict.items()}
+                test_dict = {sym: df[(df.index.year == y) & (((df.index.month - 1) // 3 + 1) == q)] for sym, df in data_dict.items()}
+                folds.append({"train": train_dict, "test": test_dict, "label": f"OOS_{y}_Q{q}"})
+    elif split_mode == 'train_val_2023':
+        val_start = pd.Timestamp("2023-01-01")
+        val_end = pd.Timestamp("2023-12-31")
+        train_end = val_start - pd.Timedelta(days=target_window)
+        train_dict = {sym: df[df.index <= train_end] for sym, df in data_dict.items()}
+        test_dict = {sym: df[(df.index >= val_start) & (df.index <= val_end)] for sym, df in data_dict.items()}
+        folds.append({"train": train_dict, "test": test_dict, "label": "2023_IS_VAL"})
     elif split_mode.startswith('train_test_split_'):
         try:
             split_year = int(split_mode.split('_')[-1])
@@ -499,24 +516,31 @@ def generate_walk_forward_target_weights(
         X_train = panel_train[selected_features].fillna(0.0)
         y_train = panel_train['target']
         
-        # Train
-        if model_type == 'lightgbm':
-            import lightgbm as lgb
-            dtrain = lgb.Dataset(X_train, label=y_train)
-            lgb_params = {
-                'objective': 'regression',
-                'metric': 'rmse',
-                'learning_rate': params.get('learning_rate', 0.05),
-                'max_depth': int(params.get('max_depth', 4)),
-                'num_leaves': int(params.get('num_leaves', 15)),
-                'feature_fraction': params.get('colsample_bytree', 0.3),
-                'verbosity': -1
-            }
-            bst = lgb.train(lgb_params, dtrain, num_boost_round=num_boost_round)
-        else:
-            dtrain = xgb.DMatrix(X_train, label=y_train)
-            bst = xgb.train(xgb_hyperparams, dtrain, num_boost_round=num_boost_round)
-        last_bst = bst
+        # Train Tri-Blend Ensemble Model F (35% XGBoost + 35% LightGBM + 30% Ridge)
+        import lightgbm as lgb
+        from sklearn.linear_model import Ridge
+        
+        # 1. XGBoost
+        dtrain = xgb.DMatrix(X_train, label=y_train)
+        bst_xgb = xgb.train(xgb_hyperparams, dtrain, num_boost_round=num_boost_round)
+        
+        # 2. LightGBM
+        dtrain_lgb = lgb.Dataset(X_train, label=y_train)
+        lgb_params = {
+            'objective': 'regression',
+            'metric': 'rmse',
+            'learning_rate': params.get('learning_rate', 0.05),
+            'max_depth': int(params.get('max_depth', 5)),
+            'num_leaves': int(params.get('num_leaves', 15)),
+            'feature_fraction': params.get('colsample_bytree', 0.3),
+            'verbosity': -1
+        }
+        bst_lgb = lgb.train(lgb_params, dtrain_lgb, num_boost_round=num_boost_round)
+        
+        # 3. Ridge Linear Regression
+        bst_ridge = Ridge(alpha=100.0, random_state=42)
+        bst_ridge.fit(X_train, y_train)
+        last_bst = bst_xgb
         
         # 4. Prepare Test panel dataset (OOS dates)
         test_dict_fold = {sym: df[df.index <= test_end] for sym, df in data_dict.items() if sym in target_symbols}
@@ -537,12 +561,13 @@ def generate_walk_forward_target_weights(
             
         X_test = panel_test[selected_features].fillna(0.0)
         
-        # Predict
-        if model_type == 'lightgbm':
-            preds = bst.predict(X_test)
-        else:
-            dtest = xgb.DMatrix(X_test)
-            preds = bst.predict(dtest)
+        # Predict via Tri-Blend Ensemble (35% XGBoost + 35% LightGBM + 30% Ridge)
+        dtest = xgb.DMatrix(X_test)
+        preds_xgb = bst_xgb.predict(dtest)
+        preds_lgb = bst_lgb.predict(X_test)
+        preds_ridge = bst_ridge.predict(X_test)
+        
+        preds = 0.35 * preds_xgb + 0.35 * preds_lgb + 0.30 * preds_ridge
         
         y_test = panel_test['target']
         fold_y_true.append(y_test)
@@ -768,7 +793,7 @@ def run_dual_mode_backtest(
 
     # Mode 4: Walk-Forward OOS (Tuned Parameters from parameters.json)
     params_mode4 = params.copy()
-    params_mode4['split_mode'] = 'train_test_split_2024'
+    params_mode4['split_mode'] = params.get('split_mode', 'walk_forward_quarterly')
     params_mode4['optimization_mode'] = 'mode_4_is_only_robust'
     print("--- Running Mode 4 (Walk-Forward OOS: 2024 - 2026) ---")
     weights_m4, equity_m4, metrics_m4 = run_strategy_backtest(data_dict, params_mode4, local_data_dir)

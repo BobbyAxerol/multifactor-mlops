@@ -81,8 +81,8 @@ class Stage2StrategyOptimizer:
             "stress_fng_threshold": stress_fng,
             "stress_dvol_threshold": stress_dvol,
             "stress_multiplier": stress_mult,
-            "split_mode": "train_test_split_2024",
-            "optimization_mode": "mode_4_is_only_robust",
+            "split_mode": base_params.get("split_mode", "walk_forward_quarterly"),
+            "optimization_mode": base_params.get("optimization_mode", "mode_4_is_only_robust"),
             "scoring_backend": "endpoint",
             "backend": "native_portfolio"
         })

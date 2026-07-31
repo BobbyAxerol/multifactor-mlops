@@ -12,21 +12,21 @@ Inverse Vol Period: 60
 Quantiles: 20
 
 --- QUANTBT PORTFOLIO METRICS ---
-Sharpe Ratio: 1.7746
-CAGR (%): 53.99%
-Total Return (%): 1162.98%
-Max Drawdown (%): 19.36%
-Profit Factor: 1.3495
-Long Hit Rate (%): 51.55%
-Short Hit Rate (%): 52.14%
-Number of Trades: 13374
+Sharpe Ratio: 1.5331
+CAGR (%): 45.31%
+Total Return (%): 798.93%
+Max Drawdown (%): 40.09%
+Profit Factor: 1.3005
+Long Hit Rate (%): 50.99%
+Short Hit Rate (%): 50.68%
+Number of Trades: 13143
 
 --- ML MODEL EVALUATION METRICS ---
-Sign Direction Accuracy: 54.73%
-Precision: 46.59%
-Recall: 28.94%
-F1-Score: 0.3570
-Rank IC (Spearman): 0.0520
-IC IR: 0.2001
-R2 Explanatory Power: 14.47%
-MSE: 0.002212
+Sign Direction Accuracy: 54.83%
+Precision: 46.21%
+Recall: 24.54%
+F1-Score: 0.3205
+Rank IC (Spearman): 0.0324
+IC IR: 0.1199
+R2 Explanatory Power: 14.99%
+MSE: 0.002197

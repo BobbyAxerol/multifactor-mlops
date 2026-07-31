@@ -544,6 +544,18 @@ class CrossSectionalFactorEngine:
             margin_risk = (oi_zscore * cvd_imbalance) / vol_clean
             features_dict[f'margin_risk_{w}'] = margin_risk.fillna(0.0)
             
+            # --- E. ENRICHED V3 FEATURES (STRICTLY PAST DATA ONLY) ---
+            # 1. Momentum Quality Ratio (Return_w / Volatility_w)
+            ret_w = (close / close.shift(w) - 1.0)
+            features_dict[f'mom_quality_{w}'] = (ret_w / vol_clean).fillna(0.0)
+
+            # 2. Volume Flow Imbalance Ratio (Volume_w / Volume_30d)
+            vol_30d = volume.rolling(window=30, min_periods=5).mean().replace(0, np.nan)
+            features_dict[f'vol_imbalance_{w}'] = (volume_ma / vol_30d).fillna(1.0)
+
+            # 3. Funding Rate Divergence (Funding_t - SMA(Funding, w))
+            features_dict[f'funding_div_{w}'] = (annualized_funding - funding_ma).fillna(0.0)
+            
         features_df = pd.DataFrame(features_dict, index=kline_df.index)
         return features_df
 
@@ -625,17 +637,58 @@ class CrossSectionalFactorEngine:
         panel_df.index.name = 'Time'
         panel_df = panel_df.reset_index().set_index(['Time', 'Symbol']).sort_index()
         
-        # 1. Cross-Sectional Percentile Ranking cho các đặc trưng riêng của coin
+        # 1. Cross-Sectional Z-Score Standardization cho các đặc trưng riêng của coin (Strictly per date timestamp)
         if asset_feature_names:
+            def zscore_transform(df_group):
+                std = df_group.std()
+                if isinstance(std, pd.Series):
+                    std = std.replace(0, 1.0).fillna(1.0)
+                else:
+                    std = 1.0 if (pd.isna(std) or std == 0) else std
+                return (df_group - df_group.mean()) / std
+
             panel_df[asset_feature_names] = (
                 panel_df[asset_feature_names]
                 .groupby(level='Time')
-                .rank(pct=True)
-                .fillna(0.5)  # Trả về phân vị trung vị nếu thiếu
+                .transform(zscore_transform)
+                .fillna(0.0)
             )
             
-        # 2. Target Demeanization: Lợi nhuận vượt trội so với trung bình thị trường cùng thời điểm
+        # 2. Target Demeanization: Neutralize target return against daily market average at same timestamp
         target_mean = panel_df['target'].groupby(level='Time').transform('mean')
         panel_df['target'] = panel_df['target'] - target_mean
         
         return panel_df
+
+    @staticmethod
+    def filter_features_by_ic_and_collinearity(
+        X_train: pd.DataFrame,
+        y_train: pd.Series,
+        max_corr_threshold: float = 0.80
+    ) -> List[str]:
+        """
+        Feature Selection Filter:
+        1. Computes Spearman Rank IC per feature on training data.
+        2. Drops highly collinear features (r > 0.80), keeping the feature with higher Rank IC.
+        """
+        from scipy.stats import spearmanr
+        feature_ic = {}
+        for col in X_train.columns:
+            r, _ = spearmanr(X_train[col], y_train)
+            feature_ic[col] = abs(r) if not np.isnan(r) else 0.0
+
+        sorted_features = sorted(feature_ic.keys(), key=lambda f: feature_ic[f], reverse=True)
+        
+        selected_features = []
+        corr_matrix = X_train.corr().abs()
+
+        for feat in sorted_features:
+            keep = True
+            for prev_feat in selected_features:
+                if corr_matrix.loc[feat, prev_feat] > max_corr_threshold:
+                    keep = False
+                    break
+            if keep:
+                selected_features.append(feat)
+
+        return selected_features
