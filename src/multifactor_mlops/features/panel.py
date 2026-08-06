@@ -8,7 +8,10 @@ import numpy as np
 from typing import Dict, Any, List, Optional
 from .asset import AssetFeatureTransformer
 from .macro import MacroOverlayTransformer
-from src.multifactor_mlops.labels.returns import calculate_next_open_to_open_returns
+from src.multifactor_mlops.labels.returns import add_forward_open_labels
+
+# Columns that are NOT model features (label + timing metadata).
+NON_FEATURE_COLUMNS = {'target', 'Symbol', 'decision_time', 'label_start_time', 'label_end_time'}
 
 class PanelDatasetBuilder:
     """
@@ -79,16 +82,26 @@ class PanelDatasetBuilder:
                     right_on=macro_time_col,
                     direction="backward"
                 )
+                # Drop the macro time column so it never leaks into the feature set
+                if macro_time_col != time_col and macro_time_col in merged.columns:
+                    merged = merged.drop(columns=[macro_time_col])
                 features_df = merged.set_index(time_col)
 
-            # Return label (Next-Open to Next-Open return)
+            # Return label (Next-Open to Next-Open return) + explicit timing timestamps
             if 'open' in df.columns:
-                target_returns = calculate_next_open_to_open_returns(df['open'], holding_bars=self.lag)
+                feats_with_open = features_df.copy()
+                feats_with_open['open'] = df['open']
+                symbol_df = add_forward_open_labels(feats_with_open, holding_bars=self.lag)
+                symbol_df = symbol_df.drop(columns=['open'])
             else:
                 close = df['close']
                 target_returns = (close.shift(-self.lag) / close - 1.0).rename('target')
+                symbol_df = pd.concat([features_df, target_returns], axis=1)
+                time_series = pd.Series(pd.DatetimeIndex(symbol_df.index))
+                symbol_df['decision_time'] = symbol_df.index
+                symbol_df['label_start_time'] = time_series.shift(-1).values
+                symbol_df['label_end_time'] = time_series.shift(-(1 + self.lag)).values
 
-            symbol_df = pd.concat([features_df, target_returns], axis=1)
             symbol_df['Symbol'] = symbol
 
             # Mask universe membership if provided
@@ -121,3 +134,10 @@ class PanelDatasetBuilder:
         panel_df['target'] = panel_df['target'] - target_mean
 
         return panel_df
+
+    @staticmethod
+    def feature_columns(panel_df: pd.DataFrame) -> List[str]:
+        """Returns the model feature columns (excludes target + timing metadata)."""
+        if panel_df is None or panel_df.empty:
+            return []
+        return [c for c in panel_df.columns if c not in NON_FEATURE_COLUMNS]

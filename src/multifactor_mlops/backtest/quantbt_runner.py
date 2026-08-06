@@ -59,19 +59,26 @@ class QuantBTRunner:
         qbt_res : Any
             Raw QuantBT result object.
         """
-        fee_rate = float(params.get("fee", params.get("fee_rate_per_fill", 0.0005)))
+        # Cost convention: fee_rate is ONE-WAY per fill (QuantBT endpoint honors
+        # fee_rate with priority over the legacy round-trip `fee`).
+        fee_rate_per_fill = params.get("fee_rate_per_fill")
+        if fee_rate_per_fill is None:
+            if params.get("fee_rate") is not None:
+                fee_rate_per_fill = params["fee_rate"]
+            else:
+                fee_rate_per_fill = float(params.get("fee", 0.001)) / 2.0  # legacy round-trip -> one-way
+        fee_rate = float(fee_rate_per_fill)
         slippage = float(params.get("slippage", 0.0001))
         leverage = float(params.get("leverage", 3.0))
         initial_capital = float(params.get("initial_capital", 100000.0))
         portfolio_mode = str(params.get("portfolio_mode", "longshort"))
         hedge_type = str(params.get("hedge_type", "target_weight"))
         trading_days = int(params.get("trading_days_per_year", 365))
+        use_funding = bool(params.get("use_funding", False))
+        funding_rate = params.get("funding_rate", 0.0)
 
-        # Anti-look-ahead & capacity safety: clip scaled weights
+        # Causal copy only -- NO full-sample statistics (removed future max clip).
         scaled_weights = positions.copy().fillna(0.0)
-        max_abs_weight = float(scaled_weights.abs().sum(axis=1).max())
-        if max_abs_weight >= 0.999:
-            scaled_weights = scaled_weights * 0.99
 
         try:
             bt_engine = self.QuantBTEndpoint.portfolio(
@@ -81,8 +88,9 @@ class QuantBTRunner:
                 initial_capital=initial_capital,
                 leverage=leverage,
                 asset_type=params.get("asset_class", "crypto"),
-                use_funding=params.get("use_funding", False),
-                fee=fee_rate,
+                use_funding=use_funding,
+                funding_rate=funding_rate,
+                fee_rate=fee_rate,
                 slippage=slippage,
                 contract_size=1.0,
                 report_level="minimal"

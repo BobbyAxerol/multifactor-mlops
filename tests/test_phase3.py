@@ -26,7 +26,9 @@ def test_immutable_base_config():
 
     # Load config and verify
     app_config = load_config(config_path)
-    assert app_config.validation.split_mode in ["train_test_split_2024", "walk_forward_2024_90d", "walk_forward_quarterly"]
+    assert app_config.validation.split_mode in [
+        "train_test_split_2024", "walk_forward_2024_90d", "walk_forward_quarterly", "walk_forward_2024"
+    ]
 
     with open(config_path, "r") as f:
         after_content = f.read()
