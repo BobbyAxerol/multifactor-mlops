@@ -2,12 +2,12 @@
 
 Two-layered ML quant strategy (cross-sectional alpha + macro stress overlay) for crypto futures. The README describes the legacy pipeline; the actively developed code is the v3 package.
 
-## Two parallel codebases (known blocker)
+## Canonical codebase (single pipeline, legacy removed)
 
-- **Active**: `src/multifactor_mlops/` — config, data, features, labels, optimization, pipelines, portfolio, tracking, universe, backtest modules. All current tests import `src.multifactor_mlops.*`.
-- **Legacy**: `multifactor_portfolio/` — old pipeline, still exercised by CI and README. Do not treat its behavior as canonical. See `MULTIFACTOR_MLOPS_3_BLOCKERS.md` for the canonical-pipeline discussion.
-- The active package is NOT installed; it uses `src.multifactor_mlops` imports. Always run from the repo root.
-- `MULTIFACTOR_MLOPS_*.md` at root are the living repair plans — read them before touching pipeline/training code.
+- **Active**: `src/multifactor_mlops/` — config, data, features, labels, optimization, pipelines, portfolio, tracking, universe, backtest modules. All tests import `src.multifactor_mlops.*`.
+- The legacy `multifactor_portfolio/` package was **deleted** in V4 cleanup — do not recreate it; the README documents the canonical v4 entrypoints.
+- The package is NOT installed; it uses `src.multifactor_mlops` imports. Always run from the repo root.
+- `MULTIFACTOR_MLOPS_*.md` at root are historical repair-plan records (V4 resolved them); `RESEARCH_LOG.md` is the living results log.
 
 ## Environment (critical)
 
@@ -20,14 +20,13 @@ Two-layered ML quant strategy (cross-sectional alpha + macro stress overlay) for
 ## Commands
 
 ```bash
-poetry run pytest tests/                     # real verification: phase1/2/3 + integrity + remaining fixes
+poetry run pytest tests/                     # real verification: phase1/2/3 + integrity + v4 + remaining fixes
 poetry run pytest tests/test_phase3.py -q    # focused check
-poetry run pytest multifactor_portfolio/training/test_train.py  # only what CI runs (legacy)
 poetry run pre-commit run --all-files        # black + ruff + hooks
 ```
 
-- CI (`.github/workflows/ci.yml`) runs **only** the legacy `test_train.py`; local `tests/` suite is the authoritative check.
-- `parameters.json` is asserted immutable by `tests/test_phase3.py::test_immutable_base_config` — never let tuning mutate it in place; write tuned params to `artifacts/models/*.json` instead.
+- CI (`.github/workflows/ci.yml`) runs `tests/` — the same canonical suite as locally.
+- `parameters.json` is asserted immutable by `tests/test_phase3.py::test_immutable_base_config` — never let tuning mutate it in place; write tuned params to `artifacts/*.json` instead (model_config.json, strategy_config.json, oof_predictions.csv are the locked tuning artifacts).
 
 ## Repo conventions (from `.agents/AGENTS.md`)
 

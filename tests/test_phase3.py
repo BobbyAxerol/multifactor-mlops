@@ -12,7 +12,6 @@ import numpy as np
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from src.multifactor_mlops.config.loader import load_config
-from src.multifactor_mlops.optimization.optuna_kernel import NestedWFOptunaOptimizer
 from src.multifactor_mlops.pipelines.fit_final import ProductionModelBundle, fit_final_production_model
 from src.multifactor_mlops.tracking.mlflow_logger import MLOpsRunLogger
 

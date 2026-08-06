@@ -30,10 +30,6 @@ jobs:
       - name: Install Dependencies
         run: poetry install --no-interaction
 
-      - name: Run Pytest (legacy CI suite)
-        run: |
-          PYTHONPATH=. poetry run pytest multifactor_portfolio/training/test_train.py
-
       - name: Run Pytest (canonical v4 suite)
         run: |
           poetry run pytest tests/ -q
