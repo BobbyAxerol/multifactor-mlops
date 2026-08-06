@@ -170,6 +170,39 @@ class BacktestConfig(BaseModel):
             raise ValueError("allow_engine_fallback=True is strictly prohibited. QuantBT is the sole backtest engine.")
         return v
 
+class Stage1TuningConfig(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    n_trials: int = 30
+    random_seed: int = 42
+    storage_uri: str = "sqlite:///artifacts/optuna/stage1.db"
+    dev_end: str = "2023-12-31"
+    inner_start: str = "2022-01-01"
+    frequency: str = "quarterly"
+    # search_space: {"param": {"low": x, "high": y, "step": z}} (numeric)
+    #              | {"param": ["a", "b", "c"]} (categorical)
+    search_space: Dict[str, Any] = Field(default_factory=dict)
+
+class Stage2TuningConfig(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    n_trials: int = 15
+    random_seed: int = 42
+    storage_uri: str = "sqlite:///artifacts/optuna/stage2.db"
+    dev_end: str = "2023-12-31"
+    inner_start: str = "2022-01-01"
+    search_space: Dict[str, Any] = Field(default_factory=dict)
+
+class OptimizationConfig(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    split_mode: str = "walk_forward_2024"
+    split_frequency: str = "quarterly"
+    window_mode: str = "expanding"
+    start_year: int = 2024
+    dev_end: str = "2023-12-31"
+    n_trials: int = 30
+    random_seed: int = 42
+    stage1: Stage1TuningConfig = Field(default_factory=Stage1TuningConfig)
+    stage2: Stage2TuningConfig = Field(default_factory=Stage2TuningConfig)
+
 class AppConfig(BaseModel):
     model_config = ConfigDict(extra="ignore")
     run: RunConfig = Field(default_factory=RunConfig)
@@ -180,3 +213,4 @@ class AppConfig(BaseModel):
     validation: ValidationConfig = Field(default_factory=ValidationConfig)
     portfolio: PortfolioConfig = Field(default_factory=PortfolioConfig)
     backtest: BacktestConfig = Field(default_factory=BacktestConfig)
+    optimization: OptimizationConfig = Field(default_factory=OptimizationConfig)

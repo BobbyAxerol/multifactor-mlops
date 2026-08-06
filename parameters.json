@@ -90,10 +90,39 @@
     "start_year": 2024,
     "dev_end": "2023-12-31",
     "n_trials": 30,
-    "optuna_early_stopping": 50,
-    "optimization_mode": "mode_4_is_only_robust",
     "random_seed": 42,
-    "stage2_n_trials": 20,
+    "optimization_mode": "mode_4_is_only_robust",
+    "stage1": {
+      "n_trials": 30,
+      "random_seed": 42,
+      "storage_uri": "sqlite:///artifacts/optuna/stage1.db",
+      "dev_end": "2023-12-31",
+      "inner_start": "2022-01-01",
+      "frequency": "quarterly",
+      "search_space": {
+        "learning_rate": {"low": 0.01, "high": 0.10, "step": 0.01},
+        "max_depth": {"low": 2, "high": 6},
+        "colsample_bytree": {"low": 0.2, "high": 0.8, "step": 0.1},
+        "subsample": {"low": 0.5, "high": 1.0, "step": 0.1},
+        "num_boost_round": {"low": 50, "high": 200, "step": 25}
+      }
+    },
+    "stage2": {
+      "n_trials": 15,
+      "random_seed": 42,
+      "storage_uri": "sqlite:///artifacts/optuna/stage2.db",
+      "dev_end": "2023-12-31",
+      "inner_start": "2022-01-01",
+      "search_space": {
+        "quantiles": {"low": 4, "high": 20, "step": 2},
+        "inverse_vol_period": {"low": 14, "high": 42, "step": 7},
+        "rebalance_schedule": ["monday_decide_weekly", "daily", "calendar_3d", "weekly_friday_exit"],
+        "rebalance_threshold": {"low": 0.01, "high": 0.05, "step": 0.01},
+        "allocation_cap": {"low": 0.10, "high": 0.35, "step": 0.05},
+        "volatility_ceiling": {"low": 0.04, "high": 0.10, "step": 0.01},
+        "stress_multiplier": {"low": 0.2, "high": 0.8, "step": 0.1}
+      }
+    },
     "_available_split_modes": [
       "walk_forward_2024",
       "walk_forward_2023",

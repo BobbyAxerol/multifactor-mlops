@@ -21,11 +21,14 @@ import argparse
 
 import numpy as np
 import pandas as pd
+from typing import Dict, Any, Tuple, List, Optional
 import optuna
+from optuna.samplers import TPESampler
 
 from src.multifactor_mlops.config.loader import load_config
 from src.multifactor_mlops.data.loader import load_all_data
 from src.multifactor_mlops.backtest.wf_runner import WalkForwardQuantBTRunner, extract_equity
+from src.multifactor_mlops.optimization.search_space import suggest_all
 
 MODEL_CONFIG_PATH = "artifacts/model_config.json"
 OOF_PATH = "artifacts/oof_predictions.csv"
@@ -80,17 +83,8 @@ class Stage2StrategyOptimizer:
         return data_dict, macro_df, funding_dict, oof_wide, membership_df
 
     def run_stage2_objective(self, trial: optuna.Trial, data_dict, macro_df, funding_dict, oof_wide, membership_df) -> float:
-        strategy_params = {
-            "quantiles": trial.suggest_int("quantiles", 4, 20, step=2),
-            "inverse_vol_period": trial.suggest_int("inverse_vol_period", 14, 42, step=7),
-            "rebalance_schedule": trial.suggest_categorical(
-                "rebalance_schedule", ["monday_decide_weekly", "daily", "calendar_3d", "weekly_friday_exit"]
-            ),
-            "rebalance_threshold": trial.suggest_float("rebalance_threshold", 0.01, 0.05, step=0.01),
-            "allocation_cap": trial.suggest_float("allocation_cap", 0.10, 0.35, step=0.05),
-            "volatility_ceiling": trial.suggest_float("volatility_ceiling", 0.04, 0.10, step=0.01),
-            "stress_multiplier": trial.suggest_float("stress_multiplier", 0.2, 0.8, step=0.1),
-        }
+        space = self.app_config.optimization.stage2.search_space
+        strategy_params = suggest_all(trial, space)
         params = {**self.fixed_ml, **strategy_params}
         funding_rate = {s: funding_dict[s] for s in data_dict if s in funding_dict} or 0.0
         funding_wide = pd.DataFrame(funding_dict) if funding_dict else None
@@ -119,13 +113,19 @@ class Stage2StrategyOptimizer:
 
     def optimize(
         self,
-        n_trials: int = 20,
-        dev_end: str = "2023-12-31",
-        inner_start: str = "2022-01-01",
+        n_trials: Optional[int] = None,
+        dev_end: Optional[str] = None,
+        inner_start: Optional[str] = None,
         data_dir: str = "./data",
         output_dir: str = "artifacts",
-        storage_uri: str = "sqlite:///artifacts/optuna/stage2.db",
+        storage_uri: Optional[str] = None,
     ) -> tuple:
+        tc = self.app_config.optimization.stage2
+        n_trials = n_trials or tc.n_trials
+        dev_end = dev_end or tc.dev_end
+        inner_start = inner_start or tc.inner_start
+        storage_uri = storage_uri or tc.storage_uri
+
         data_dict, macro_df, funding_dict, oof_wide, membership_df = self.prepare(dev_end, inner_start, data_dir)
 
         if storage_uri:
@@ -133,6 +133,7 @@ class Stage2StrategyOptimizer:
         study = optuna.create_study(
             direction="maximize",
             study_name="stage2_strategy_tuning",
+            sampler=TPESampler(seed=tc.random_seed),
             storage=storage_uri,
             load_if_exists=True,
         )
@@ -163,7 +164,7 @@ class Stage2StrategyOptimizer:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--trials", type=int, default=20)
+    parser.add_argument("--trials", type=int, default=None)
     parser.add_argument("--dev-end", default="2023-12-31")
     parser.add_argument("--inner-start", default="2022-01-01")
     parser.add_argument("--data-dir", default="./data")

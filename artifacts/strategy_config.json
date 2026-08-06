@@ -5,11 +5,11 @@
   "subsample": 0.8,
   "num_boost_round": 75,
   "random_state": 42,
-  "quantiles": 10,
-  "inverse_vol_period": 21,
-  "rebalance_schedule": "weekly_friday_exit",
+  "quantiles": 6,
+  "inverse_vol_period": 28,
+  "rebalance_schedule": "daily",
   "rebalance_threshold": 0.02,
-  "allocation_cap": 0.30000000000000004,
-  "volatility_ceiling": 0.04,
-  "stress_multiplier": 0.6000000000000001
+  "allocation_cap": 0.25,
+  "volatility_ceiling": 0.07,
+  "stress_multiplier": 0.30000000000000004
 }

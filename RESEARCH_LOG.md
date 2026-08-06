@@ -141,3 +141,30 @@ poetry run pytest tests/ -q
 |---|---|---|
 | V4.3 composite daily (open labels) | +0.39 | -54.4% |
 | **V4.4 composite daily (close labels, config mới)** | **+0.30** | **-23.0%** |
+
+---
+
+## V4.5 — Chuẩn hoá tuning params (declared in parameters.json)
+
+### Thay đổi
+- `OptimizationConfig` vào schema: `optimization.stage1` + `optimization.stage2` (n_trials, random_seed, storage_uri, dev_end, inner_start, frequency, **search_space** khai báo đầy đủ)
+- `search_space.py`: helper suggest từ spec khai báo (numeric range hoặc categorical) — **không còn hardcode range trong code**
+- Stage 1: QMC seed từ config · Stage 2: **TPE seed deterministic (42)** — trước đây không seed → không reproducible
+
+### Kết quả rerun (deterministic)
+| Bước | Giá trị |
+|---|---|
+| Stage 1 (30 trials, seed 42) | best mean IC 0.0 (như cũ — QMC cùng seed) |
+| OOF rank IC (dev) | +0.0141 |
+| Stage 2 (15 trials, TPE seed 42) | best robust **0.475**: quantiles 6, inv_vol 28, daily, threshold 0.02, cap 0.25, ceiling 0.07, stress 0.3 |
+| **OOS 2024→ composite daily** | **Sharpe +0.65, +48.6% (148.6k), CAGR +16.5%, MaxDD -32.8%**, median fold Sharpe 0.40, 31959 lệnh |
+
+- So với V4.4 (chưa seed): Sharpe 0.30 → **0.65**, return +10.3% → **+48.6%**
+- MLflow: `05344dedb31645bda3b0cf4f604ead64`
+- Lưu ý: quantiles 6 (đuôi rộng hơn ~16.7%) làm tăng turnover (31.9k lệnh); kết quả OOS tốt hơn hẳn — nhưng là kết quả của 1 lần chọn trên dev, cần theo dõi ổn định.
+
+### Bảng OOS toàn bộ
+| Cấu hình | Sharpe | MaxDD |
+|---|---|---|
+| V4.4 composite (tuning chưa seed) | +0.30 | -23.0% |
+| **V4.5 composite (tuning chuẩn hoá)** | **+0.65** | -32.8% |

@@ -18,6 +18,7 @@ import argparse
 
 import numpy as np
 import pandas as pd
+from typing import Dict, Any, Tuple, List, Optional
 import optuna
 from optuna.samplers import QMCSampler
 
@@ -27,6 +28,7 @@ from src.multifactor_mlops.features.panel import PanelDatasetBuilder
 from src.multifactor_mlops.labels.returns import filter_train_by_label_end
 from src.multifactor_mlops.optimization.folds import PurgedExpandingFoldBuilder
 from src.multifactor_mlops.optimization.model_utils import train_xgb_model, predict_xgb_model, rank_ic
+from src.multifactor_mlops.optimization.search_space import suggest_all
 
 MODEL_CONFIG_PATH = "artifacts/model_config.json"
 TRIALS_PATH = "artifacts/model_calibration_trials.json"
@@ -76,14 +78,9 @@ class PureMLStage1Optimizer:
         folds,
         base_ml: dict,
     ) -> float:
-        ml_params = {
-            "learning_rate": trial.suggest_float("learning_rate", 0.01, 0.10, step=0.01),
-            "max_depth": trial.suggest_int("max_depth", 2, 6),
-            "colsample_bytree": trial.suggest_float("colsample_bytree", 0.2, 0.8, step=0.1),
-            "subsample": trial.suggest_float("subsample", 0.5, 1.0, step=0.1),
-            "num_boost_round": trial.suggest_int("num_boost_round", 50, 200, step=25),
-            "random_state": base_ml.get("random_state", 42),
-        }
+        space = self.app_config.optimization.stage1.search_space
+        ml_params = suggest_all(trial, space)
+        ml_params["random_state"] = base_ml.get("random_state", 42)
 
         fold_ics = []
         for fold in folds:
@@ -107,14 +104,21 @@ class PureMLStage1Optimizer:
 
     def optimize(
         self,
-        n_trials: int = 30,
-        dev_end: str = "2023-12-31",
-        inner_start: str = "2022-01-01",
-        frequency: str = "quarterly",
+        n_trials: Optional[int] = None,
+        dev_end: Optional[str] = None,
+        inner_start: Optional[str] = None,
+        frequency: Optional[str] = None,
         data_dir: str = "./data",
         output_dir: str = "artifacts",
-        storage_uri: str = "sqlite:///artifacts/optuna/stage1.db",
+        storage_uri: Optional[str] = None,
     ) -> tuple:
+        tc = self.app_config.optimization.stage1
+        n_trials = n_trials or tc.n_trials
+        dev_end = dev_end or tc.dev_end
+        inner_start = inner_start or tc.inner_start
+        frequency = frequency or tc.frequency
+        storage_uri = storage_uri or tc.storage_uri
+
         panel, feature_cols, folds = self.prepare(dev_end, inner_start, frequency, data_dir)
         base_ml = self.app_config.model.model_dump()
 
@@ -122,7 +126,7 @@ class PureMLStage1Optimizer:
             os.makedirs(os.path.dirname(storage_uri.replace("sqlite:///", "")), exist_ok=True)
         study = optuna.create_study(
             direction="maximize",
-            sampler=QMCSampler(scramble=True, seed=42),
+            sampler=QMCSampler(scramble=True, seed=tc.random_seed),
             study_name="stage1_pure_ml_tuning",
             storage=storage_uri,
             load_if_exists=True,
@@ -157,7 +161,7 @@ class PureMLStage1Optimizer:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--trials", type=int, default=30)
+    parser.add_argument("--trials", type=int, default=None)
     parser.add_argument("--dev-end", default="2023-12-31")
     parser.add_argument("--inner-start", default="2022-01-01")
     parser.add_argument("--frequency", default="quarterly")
