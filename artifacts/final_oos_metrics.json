@@ -1,0 +1,200 @@
+{
+  "oos_start": "2024-01-01",
+  "split_frequency": "quarterly",
+  "window_mode": "expanding",
+  "n_folds": 11,
+  "quantbt_metrics": {
+    "initial_capital": 100000.0,
+    "final_equity": 66412.119535,
+    "total_return_pct": -33.58788,
+    "cagr_pct": -14.603065,
+    "sharpe": -0.240842,
+    "sortino": -0.226138,
+    "calmar": -0.281852,
+    "omega": 0.951228,
+    "max_drawdown_pct": 51.811118,
+    "avg_drawdown_pct": 26.391166,
+    "max_dd_duration_days": 472.0,
+    "avg_dd_duration_days": 133.0,
+    "profit_factor": 0.951228,
+    "long_hitrate_pct": 39.600399,
+    "short_hitrate_pct": 43.499123,
+    "avg_win_pct": 1.304609,
+    "avg_loss_pct": -1.012438,
+    "expectancy_pct": -0.04971,
+    "num_trades": 2956.0,
+    "liquidated": 0.0
+  },
+  "per_fold_sharpe": [
+    {
+      "test_start": "2024-01-01",
+      "test_end": "2024-03-31",
+      "sharpe": -1.9039,
+      "bars": 90
+    },
+    {
+      "test_start": "2024-04-01",
+      "test_end": "2024-06-30",
+      "sharpe": -1.8267,
+      "bars": 90
+    },
+    {
+      "test_start": "2024-07-01",
+      "test_end": "2024-09-30",
+      "sharpe": 1.0917,
+      "bars": 91
+    },
+    {
+      "test_start": "2024-10-01",
+      "test_end": "2024-12-31",
+      "sharpe": 2.8333,
+      "bars": 91
+    },
+    {
+      "test_start": "2025-01-01",
+      "test_end": "2025-03-31",
+      "sharpe": 0.8144,
+      "bars": 89
+    },
+    {
+      "test_start": "2025-04-01",
+      "test_end": "2025-06-30",
+      "sharpe": -1.5275,
+      "bars": 90
+    },
+    {
+      "test_start": "2025-07-01",
+      "test_end": "2025-09-30",
+      "sharpe": -4.2727,
+      "bars": 91
+    },
+    {
+      "test_start": "2025-10-01",
+      "test_end": "2025-12-31",
+      "sharpe": 0.3359,
+      "bars": 91
+    },
+    {
+      "test_start": "2026-01-01",
+      "test_end": "2026-03-31",
+      "sharpe": 2.6279,
+      "bars": 89
+    },
+    {
+      "test_start": "2026-04-01",
+      "test_end": "2026-06-30",
+      "sharpe": -1.0004,
+      "bars": 90
+    },
+    {
+      "test_start": "2026-07-01",
+      "test_end": "2026-08-05",
+      "sharpe": -2.3518,
+      "bars": 35
+    }
+  ],
+  "median_fold_sharpe": -1.0004,
+  "oos_equity_start": 100000.0,
+  "oos_equity_end": 66412.11953497885,
+  "oos_bars": 948,
+  "params": {
+    "learning_rate": 0.04,
+    "max_depth": 6,
+    "colsample_bytree": 0.7,
+    "subsample": 0.8,
+    "num_boost_round": 75,
+    "random_state": 42,
+    "quantiles": 20,
+    "inverse_vol_period": 35,
+    "rebalance_schedule": "weekly_friday_exit",
+    "rebalance_threshold": 0.01,
+    "allocation_cap": 0.35,
+    "volatility_ceiling": 0.07,
+    "stress_multiplier": 0.30000000000000004
+  },
+  "config_snapshot": {
+    "run": {
+      "seed": 42,
+      "timezone": "UTC",
+      "fail_fast": true,
+      "production_cutoff": null
+    },
+    "data": {
+      "asset_class": "crypto",
+      "universe_name": "binance_daily",
+      "top_n_symbols": 40,
+      "data_repo_path": "/root/bobby/pool_alpha/alphas_storage/_get_data",
+      "quantbt_repo_path": "/root/bobby/pool_alpha/quantbt",
+      "allow_bfill": false
+    },
+    "features": {
+      "windows": [
+        7,
+        14,
+        30,
+        60,
+        90
+      ],
+      "quantiles": 16,
+      "warmup_policy": "drop",
+      "missing_policy": "preserve"
+    },
+    "label": {
+      "return_type": "next_open_to_open",
+      "holding_bars": 1,
+      "cross_sectional_demean": true
+    },
+    "model": {
+      "model_type": "xgboost",
+      "learning_rate": 0.07,
+      "max_depth": 5,
+      "num_boost_round": 100,
+      "colsample_bytree": 0.3,
+      "subsample": 0.8,
+      "random_state": 42,
+      "train_step_days": 4
+    },
+    "validation": {
+      "split_mode": "walk_forward_2024",
+      "split_frequency": "quarterly",
+      "window_mode": "expanding",
+      "train_window": null,
+      "min_train_bars": 120,
+      "min_test_bars": 20,
+      "first_oos_date": "2024-01-01",
+      "outer_test_period": "quarterly",
+      "purge_bars": 1,
+      "embargo_bars": 1,
+      "unsupported_split_policy": "raise"
+    },
+    "portfolio": {
+      "quantiles": 16,
+      "allocation_cap": 0.25,
+      "inverse_vol_period": 42,
+      "volatility_ceiling": 0.08,
+      "rebalance_schedule": "weekly_friday_exit",
+      "rebalance_threshold": 0.05,
+      "stress_vix_threshold": 26.0,
+      "stress_fng_threshold": 20.0,
+      "stress_dvol_threshold": 50.0,
+      "stress_multiplier": 0.4,
+      "portfolio_mode": "longshort",
+      "hedge_type": "target_weight"
+    },
+    "backtest": {
+      "engine": "quantbt",
+      "backend": "native_portfolio",
+      "portfolio_mode": "longshort",
+      "hedge_type": "target_weight",
+      "allow_engine_fallback": false,
+      "initial_capital": 100000.0,
+      "leverage": 3.0,
+      "fee_rate_per_fill": 0.0005,
+      "fee": 0.001,
+      "slippage": 0.0001,
+      "trading_days_per_year": 365,
+      "use_funding": true
+    }
+  },
+  "git_sha": "4520e9a"
+}
