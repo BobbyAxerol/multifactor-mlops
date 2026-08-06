@@ -134,7 +134,8 @@ def fit_final_production_model(
     funding_df: Optional[pd.DataFrame] = None,
     config_path: str = "parameters.json",
     production_cutoff: Optional[str] = None,
-    overlay_params: Optional[Dict[str, Any]] = None
+    overlay_params: Optional[Dict[str, Any]] = None,
+    universe_membership_df: Optional[pd.DataFrame] = None
 ) -> ProductionModelBundle:
     """
     Fits one final production model on rows with label_end_time <= production_cutoff.
@@ -144,14 +145,18 @@ def fit_final_production_model(
     panel_builder = PanelDatasetBuilder(
         windows=app_config.features.windows,
         cross_sectional_rank=True,
-        lag=app_config.label.holding_bars
+        lag=app_config.label.holding_bars,
+        keep_families=app_config.features.keep_families,
+        inverted_features=app_config.features.inverted_features,
+        use_macro_features=app_config.features.use_macro_features,
     )
 
     panel_df = panel_builder.build_panel_dataset(
         data_dict=data_dict,
         symbols=symbols,
         macro_df=macro_df,
-        funding_df=funding_df
+        funding_df=funding_df,
+        universe_membership_df=universe_membership_df
     )
 
     if panel_df.empty:

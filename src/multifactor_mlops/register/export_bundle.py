@@ -39,7 +39,7 @@ def export_bundle(
         strategy_config = json.load(f)
 
     app_config = load_config(config_path)
-    data_dict, macro_df, funding_dict = load_all_data(
+    data_dict, macro_df, funding_dict, membership_df = load_all_data(
         app_config, data_dir=data_dir, end_date=training_cutoff
     )
 
@@ -51,6 +51,7 @@ def export_bundle(
         config_path=config_path,
         production_cutoff=training_cutoff,
         overlay_params=strategy_config,
+        universe_membership_df=membership_df,
     )
     bundle.save(output_dir)
     print(f"[Bundle] Exported -> {output_dir}")

@@ -72,19 +72,19 @@ class Stage2StrategyOptimizer:
         with open(MODEL_CONFIG_PATH, "r") as f:
             self.fixed_ml = json.load(f)
 
-        data_dict, macro_df, funding_dict = load_all_data(
+        data_dict, macro_df, funding_dict, membership_df = load_all_data(
             self.app_config, data_dir=data_dir, end_date=dev_end
         )
         oof = pd.read_csv(OOF_PATH, parse_dates=["Time"])
         oof_wide = oof.pivot_table(index="Time", columns="Symbol", values="pred").sort_index()
-        return data_dict, macro_df, funding_dict, oof_wide
+        return data_dict, macro_df, funding_dict, oof_wide, membership_df
 
-    def run_stage2_objective(self, trial: optuna.Trial, data_dict, macro_df, funding_dict, oof_wide) -> float:
+    def run_stage2_objective(self, trial: optuna.Trial, data_dict, macro_df, funding_dict, oof_wide, membership_df) -> float:
         strategy_params = {
             "quantiles": trial.suggest_int("quantiles", 4, 20, step=2),
             "inverse_vol_period": trial.suggest_int("inverse_vol_period", 14, 42, step=7),
             "rebalance_schedule": trial.suggest_categorical(
-                "rebalance_schedule", ["calendar_3d", "calendar_5d", "weekly_friday_exit"]
+                "rebalance_schedule", ["monday_decide_weekly", "daily", "calendar_3d", "weekly_friday_exit"]
             ),
             "rebalance_threshold": trial.suggest_float("rebalance_threshold", 0.01, 0.05, step=0.01),
             "allocation_cap": trial.suggest_float("allocation_cap", 0.10, 0.35, step=0.05),
@@ -103,6 +103,7 @@ class Stage2StrategyOptimizer:
             macro_df=macro_df,
             funding_rate=funding_rate,
             funding_wide=funding_wide,
+            universe_membership_df=membership_df,
             split_mode="walk_forward_2022",
             split_frequency="quarterly",
             window_mode="expanding",
@@ -125,7 +126,7 @@ class Stage2StrategyOptimizer:
         output_dir: str = "artifacts",
         storage_uri: str = "sqlite:///artifacts/optuna/stage2.db",
     ) -> tuple:
-        data_dict, macro_df, funding_dict, oof_wide = self.prepare(dev_end, inner_start, data_dir)
+        data_dict, macro_df, funding_dict, oof_wide, membership_df = self.prepare(dev_end, inner_start, data_dir)
 
         if storage_uri:
             os.makedirs(os.path.dirname(storage_uri.replace("sqlite:///", "")), exist_ok=True)
@@ -137,7 +138,7 @@ class Stage2StrategyOptimizer:
         )
 
         def objective(trial):
-            return self.run_stage2_objective(trial, data_dict, macro_df, funding_dict, oof_wide)
+            return self.run_stage2_objective(trial, data_dict, macro_df, funding_dict, oof_wide, membership_df)
 
         study.optimize(objective, n_trials=n_trials)
 

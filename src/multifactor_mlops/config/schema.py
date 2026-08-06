@@ -36,6 +36,11 @@ class DataConfig(BaseModel):
     data_repo_path: str = "/root/bobby/pool_alpha/alphas_storage/_get_data"
     quantbt_repo_path: str = "/root/bobby/pool_alpha/quantbt"
     allow_bfill: bool = False
+    # Point-in-time universe: membership by rolling lagged turnover (no
+    # full-sample survivorship bias in the traded symbol set).
+    use_point_in_time_universe: bool = True
+    universe_lookback_days: int = 30
+    universe_min_history_days: int = 180
 
     @field_validator("allow_bfill")
     @classmethod
@@ -50,6 +55,15 @@ class FeaturesConfig(BaseModel):
     quantiles: int = 16
     warmup_policy: str = "drop"
     missing_policy: str = "preserve"
+    # Evidence-backed feature selection (research V4.1):
+    # keep only factor families that show cross-window tail spread (dev + OOS).
+    keep_families: Optional[List[str]] = Field(default=None)
+    # Sign-flip these features BEFORE cross-sectional ranking (their tail spread
+    # is negative: high values mean FUTURE UNDERPERFORMANCE).
+    inverted_features: List[str] = Field(default_factory=list)
+    # Macro features are per-day constants -> zero cross-sectional IC by
+    # construction; exclude them from the model feature set (still used as overlay).
+    use_macro_features: bool = True
 
 class LabelConfig(BaseModel):
     model_config = ConfigDict(extra="ignore")

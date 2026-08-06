@@ -67,6 +67,7 @@ class WalkForwardQuantBTRunner:
         window_mode: Optional[str] = None,
         predictions_cache: Optional[pd.DataFrame] = None,
         funding_wide: Optional[pd.DataFrame] = None,
+        universe_membership_df: Optional[pd.DataFrame] = None,
     ):
         """
         Runs the QuantBT native walk-forward backtest and returns the raw result.
@@ -75,6 +76,7 @@ class WalkForwardQuantBTRunner:
         predictions_cache : optional pre-computed OOF predictions (no training).
         funding_wide : daily funding DataFrame (symbol columns) used for the
                        carry FEATURE and (optionally) the engine funding cost.
+        universe_membership_df : point-in-time traded-universe mask (Time x Symbol).
         """
         bc = app_config.backtest
         vc = app_config.validation
@@ -98,6 +100,7 @@ class WalkForwardQuantBTRunner:
             macro_df=macro_df,
             predictions_cache=predictions_cache,
             funding_df=funding_wide,
+            universe_membership_df=universe_membership_df,
         )
 
         try:

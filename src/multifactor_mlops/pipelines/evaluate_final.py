@@ -78,7 +78,7 @@ def evaluate_final_oos(
         strategy_config = json.load(f)
 
     app_config = load_config(config_path)
-    data_dict, macro_df, funding_dict = load_all_data(app_config, data_dir=data_dir)
+    data_dict, macro_df, funding_dict, membership_df = load_all_data(app_config, data_dir=data_dir)
     funding_rate = {s: funding_dict[s] for s in data_dict if s in funding_dict} or 0.0
     funding_wide = pd.DataFrame(funding_dict) if funding_dict else None
 
@@ -93,6 +93,7 @@ def evaluate_final_oos(
         macro_df=macro_df,
         funding_rate=funding_rate,
         funding_wide=funding_wide,
+        universe_membership_df=membership_df,
         split_mode=f"walk_forward_{oos_start[:4]}",
         split_frequency=split_frequency,
         window_mode="expanding",

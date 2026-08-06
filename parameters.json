@@ -11,13 +11,19 @@
     "top_n_symbols": 40,
     "data_repo_path": "/root/bobby/pool_alpha/alphas_storage/_get_data",
     "quantbt_repo_path": "/root/bobby/pool_alpha/quantbt",
-    "allow_bfill": false
+    "allow_bfill": false,
+    "use_point_in_time_universe": true,
+    "universe_lookback_days": 30,
+    "universe_min_history_days": 180
   },
   "features": {
     "windows": [7, 14, 30, 60, 90],
     "quantiles": 16,
     "warmup_policy": "drop",
-    "missing_policy": "preserve"
+    "missing_policy": "preserve",
+    "keep_families": ["mom_rsi", "mom_wma_dist", "retail_flow", "margin_risk"],
+    "inverted_features": ["retail_flow_7", "margin_risk_90"],
+    "use_macro_features": false
   },
   "label": {
     "return_type": "next_open_to_open",
@@ -52,7 +58,7 @@
     "allocation_cap": 0.25,
     "inverse_vol_period": 42,
     "volatility_ceiling": 0.08,
-    "rebalance_schedule": "weekly_friday_exit",
+    "rebalance_schedule": "monday_decide_weekly",
     "rebalance_threshold": 0.05,
     "stress_vix_threshold": 26.0,
     "stress_fng_threshold": 20.0,

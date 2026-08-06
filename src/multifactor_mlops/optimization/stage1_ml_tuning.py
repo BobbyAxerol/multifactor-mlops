@@ -42,18 +42,22 @@ class PureMLStage1Optimizer:
         self.app_config = load_config(config_path)
 
     def prepare(self, dev_end: str, inner_start: str, frequency: str, data_dir: str):
-        data_dict, macro_df, funding_dict = load_all_data(
+        data_dict, macro_df, funding_dict, membership_df = load_all_data(
             self.app_config, data_dir=data_dir, end_date=dev_end
         )
         builder = PanelDatasetBuilder(
             windows=self.app_config.features.windows,
             cross_sectional_rank=True,
             lag=self.app_config.label.holding_bars,
+            keep_families=self.app_config.features.keep_families,
+            inverted_features=self.app_config.features.inverted_features,
+            use_macro_features=self.app_config.features.use_macro_features,
         )
         panel = builder.build_panel_dataset(
             data_dict=data_dict,
             symbols=list(data_dict.keys()),
             macro_df=macro_df,
+            universe_membership_df=membership_df,
         )
         if panel.empty:
             raise ValueError("Stage1: empty panel.")

@@ -60,6 +60,7 @@ class MultiFactorWalkForwardStrategy:
         macro_df: Optional[pd.DataFrame] = None,
         predictions_cache: Optional[pd.DataFrame] = None,
         funding_df: Optional[pd.DataFrame] = None,
+        universe_membership_df: Optional[pd.DataFrame] = None,
     ):
         self.data_dict = data_dict
         self.symbols = list(symbols)
@@ -67,6 +68,7 @@ class MultiFactorWalkForwardStrategy:
         self.strategy_params = strategy_params
         self.macro_df = macro_df
         self.funding_df = funding_df
+        self.universe_membership_df = universe_membership_df
         # predictions_cache: DataFrame indexed by Time with symbol columns
         # (pre-computed OOF predictions). When provided, NO model is trained.
         self.predictions_cache = predictions_cache
@@ -81,16 +83,21 @@ class MultiFactorWalkForwardStrategy:
 
     # ------------------------------------------------------------------ setup
     def _build_panel(self) -> pd.DataFrame:
+        fc = self.app_config.features
         builder = PanelDatasetBuilder(
-            windows=self.app_config.features.windows,
+            windows=fc.windows,
             cross_sectional_rank=True,
             lag=self.app_config.label.holding_bars,
+            keep_families=fc.keep_families,
+            inverted_features=fc.inverted_features,
+            use_macro_features=fc.use_macro_features,
         )
         panel = builder.build_panel_dataset(
             data_dict=self.data_dict,
             symbols=self.symbols,
             macro_df=self.macro_df,
             funding_df=self.funding_df,
+            universe_membership_df=self.universe_membership_df,
         )
         if panel.empty:
             raise ValueError("MultiFactorWalkForwardStrategy: panel dataset is empty.")
@@ -265,12 +272,17 @@ class MultiFactorWalkForwardStrategy:
         else:
             weights = pd.DataFrame(0.0, index=req_index, columns=self.symbols)
 
-        # Canonical 1-bar execution lag: decision at close D -> executed at close D+1
-        positions = weights.shift(1).fillna(0.0)
-
-        # Rebalance schedule POST-shift (legacy convention: weekly_friday_exit zeroes weekend rows)
+        # Execution schedule (includes the 1-bar lag):
+        #  - monday_decide_weekly: Monday close decision -> hold Tue-Fri (low turnover)
+        #  - daily: decision at close D -> executed at close D+1
+        #  - legacy calendar schedules: shift(1) + calendar hold
         schedule = self.strategy_params.get("rebalance_schedule", "weekly_friday_exit")
-        if schedule and schedule != "daily" and not positions.empty:
+        if schedule == "monday_decide_weekly":
+            positions = PortfolioConstructor.apply_monday_decide_schedule(weights)
+        elif schedule == "daily":
+            positions = weights.shift(1).fillna(0.0)
+        else:
+            positions = weights.shift(1).fillna(0.0)
             positions = PortfolioConstructor.apply_calendar_holding_schedule(positions, schedule=schedule)
 
         positions = positions.reindex(req_index, columns=self.symbols).fillna(0.0)
@@ -285,6 +297,7 @@ def make_strategy_factory(
     macro_df: Optional[pd.DataFrame] = None,
     predictions_cache: Optional[pd.DataFrame] = None,
     funding_df: Optional[pd.DataFrame] = None,
+    universe_membership_df: Optional[pd.DataFrame] = None,
 ):
     """Factory returning a strategy INSTANCE bound to its data/panel context."""
     strategy = MultiFactorWalkForwardStrategy(
@@ -295,5 +308,6 @@ def make_strategy_factory(
         macro_df=macro_df,
         predictions_cache=predictions_cache,
         funding_df=funding_df,
+        universe_membership_df=universe_membership_df,
     )
     return strategy

@@ -56,3 +56,31 @@ poetry run pytest tests/ -q
 - Tìm feature mới có IC thật (thử: funding regime, cross-sectional momentum spread, HV vs IV, carry decay, turnover flow) và test trên dev TRƯỚC khi chạm OOS.
 - Thử label horizon H > 1 và tần suất rebalance.
 - Kiểm tra thủ công universe survivorship: hiện chọn top-40 theo dollar volume toàn mẫu.
+
+---
+
+## V4.2 — Hygiene upgrade (mục 3): kết quả rerun
+
+### Thay đổi codebase (đã test, 46/46 pass)
+- **Feature selection có bằng chứng**: `keep_families=[mom_rsi, mom_wma_dist, retail_flow, margin_risk]`, đảo dấu `retail_flow_7`, `margin_risk_90`, **loại macro features** khỏi feature set (IC NaN)
+- **Point-in-time universe**: membership theo rolling lagged turnover (hết survivorship top-40 toàn mẫu) — `use_point_in_time_universe=true`
+- **Low-turnover schedule**: `monday_decide_weekly` (quyết định thứ 2, giữ T2-T6)
+
+### Kết quả rerun
+| Bước | Kết quả cũ | Kết quả mới |
+|---|---|---|
+| Stage 1 best mean IC (dev) | 0.0000 | 0.0000 (tuning noise) |
+| **OOF overall rank IC (dev)** | **-0.0031** | **+0.0302** ✅ |
+| Stage 2 best robust (dev) | 1.584 | 0.736 (daily) |
+| **OOS daily (2024→)** | -0.24 (pipeline cũ) | **-0.76** (9836 lệnh) |
+| **OOS monday_decide_weekly** | — | **-1.14** (4322 lệnh) |
+
+### Kết luận
+1. Hygiene changes ĐÚNG (IC dev cải thiện -0.003 → +0.030; test đầy đủ) nhưng **KHÔNG tạo edge OOS**: cả 2 schedule đều âm.
+2. **Model XGBoost là điểm yếu trên OOS**: pipeline model-based (-0.76/-1.14) thua xa composite không-ML (+0.26±0.5 trong exp_42, quanh 0). Model trộn feature + MSE làm hỏng ranking ngoài mẫu (xác nhận lại exp_20b).
+3. Turnover vẫn là kẻ giết alpha: 4322-9836 lệnh/2.5 năm × 6bp ≈ $100k+ chi phí vs alpha ~$3-10k.
+4. **Hướng có bằng chứng tốt nhất hiện tại (nghiên cứu tiếp)**: bỏ ML, dùng composite trực tiếp (mom_14+mom_30−retail_flow_7−margin_risk_90 z-sum) + monday-decide + point-in-time universe. Kỳ vọng OOS ~0 tới +0.3 (marginal) — cần thêm nguồn dữ liệu mới (OI/LS ratio) mới có thể kỳ vọng cao hơn.
+
+### Artifacts
+- model_config.json / strategy_config.json (daily) / oof_predictions.csv / final_oos_metrics.json đã cập nhật
+- MLflow run daily: `7a7a8ab755a24805a6f5c471b9c80c1f`

@@ -45,7 +45,7 @@ def generate_oof_predictions(
         ml_params = json.load(f)
 
     app_config = load_config(config_path)
-    data_dict, macro_df, funding_dict = load_all_data(
+    data_dict, macro_df, funding_dict, membership_df = load_all_data(
         app_config, data_dir=data_dir, end_date=dev_end
     )
 
@@ -53,12 +53,16 @@ def generate_oof_predictions(
         windows=app_config.features.windows,
         cross_sectional_rank=True,
         lag=app_config.label.holding_bars,
+        keep_families=app_config.features.keep_families,
+        inverted_features=app_config.features.inverted_features,
+        use_macro_features=app_config.features.use_macro_features,
     )
     panel = builder.build_panel_dataset(
         data_dict=data_dict,
         symbols=list(data_dict.keys()),
         macro_df=macro_df,
         funding_df=pd.DataFrame(funding_dict) if funding_dict else None,
+        universe_membership_df=membership_df,
     )
     if panel.empty:
         raise ValueError("generate_oof_predictions: empty panel.")
