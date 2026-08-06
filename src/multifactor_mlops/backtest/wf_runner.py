@@ -81,6 +81,11 @@ class WalkForwardQuantBTRunner:
         bc = app_config.backtest
         vc = app_config.validation
 
+        # Base strategy params = parameters.json portfolio section (signal_mode,
+        # composite_features, quantiles, schedule, overlay...) overridden by locked
+        # tuning artifacts passed via `params`.
+        merged_params = {**app_config.portfolio.model_dump(), **params}
+
         # Engine requires a funding entry for EVERY traded symbol: complete gaps with 0.0.
         # Copy all series: the engine aligns/mutates passed series IN PLACE (tz-aware),
         # which would corrupt caller-owned data between trials.
@@ -96,7 +101,7 @@ class WalkForwardQuantBTRunner:
             data_dict=data_dict,
             symbols=symbols,
             app_config=app_config,
-            strategy_params=params,
+            strategy_params=merged_params,
             macro_df=macro_df,
             predictions_cache=predictions_cache,
             funding_df=funding_wide,
@@ -131,7 +136,7 @@ class WalkForwardQuantBTRunner:
             qbt_res = bt.backtest(
                 data=data_for_engine,
                 symbols=symbols,
-                params=params,
+                params=merged_params,
                 datetime_index=common_index,
             )
         except Exception as e:

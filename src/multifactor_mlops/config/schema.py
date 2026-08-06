@@ -133,6 +133,10 @@ class PortfolioConfig(BaseModel):
     volatility_ceiling: float = 0.08
     rebalance_schedule: str = "weekly_friday_exit"
     rebalance_threshold: float = 0.05
+    # Signal source: "ml" (XGBoost per-fold) or "composite" (model-free
+    # per-timestamp z-score sum of composite_features — evidence-based V4.1).
+    signal_mode: str = "ml"
+    composite_features: List[str] = Field(default_factory=list)
     stress_vix_threshold: float = 26.0
     stress_fng_threshold: float = 20.0
     stress_dvol_threshold: float = 50.0

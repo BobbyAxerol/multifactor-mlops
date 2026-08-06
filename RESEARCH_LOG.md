@@ -84,3 +84,32 @@ poetry run pytest tests/ -q
 ### Artifacts
 - model_config.json / strategy_config.json (daily) / oof_predictions.csv / final_oos_metrics.json đã cập nhật
 - MLflow run daily: `7a7a8ab755a24805a6f5c471b9c80c1f`
+
+---
+
+## V4.3 — Model-free composite qua pipeline: kết quả OOS
+
+### Thay đổi
+- `asset.py`: thêm raw momentum `mom_{7,14,30,60,90}` (cho composite)
+- `PortfolioConfig`: `signal_mode` ("ml"|"composite") + `composite_features`
+- Strategy: composite mode = z-sum per-timestamp của `[mom_14, mom_30, retail_flow_7(flipped), margin_risk_90(flipped)]` — KHÔNG train model
+- `wf_runner`: base params = portfolio config từ parameters.json, artifacts override
+
+### OOS 2024→ (fee 5bp, slippage 1bp, funding ON, PIT universe, composite signal)
+| Schedule | Sharpe | Total return | MaxDD | Trades |
+|---|---|---|---|---|
+| **daily** | **+0.39** | **+21.8%** (121.8k) | -54.4% | 14106 |
+| monday_decide_weekly | -0.34 | -28.3% | -45.3% | 6560 |
+
+→ **Lần đầu tiên OOS dương** trong toàn bộ session. Composite signal có alpha nhanh (1 ngày): daily bắt được, giữ 5 ngày mất alpha.
+- MLflow: `f8b892a40c3d4f509f9e9f7e120dcc30`
+- Cảnh báo: MaxDD -54% rất sâu; số lệnh 14k (cost cao nhưng alpha vượt cost trên OOS).
+
+### So sánh toàn bộ OOS đã chạy
+| Cấu hình | OOS Sharpe |
+|---|---|
+| Pipeline cũ (V3, contaminated) | 1.32 (ảo) |
+| V4 ML pipeline (full features, H=1) | -0.24 |
+| V4.2 hygiene + ML daily | -0.76 |
+| V4.2 hygiene + ML monday | -1.14 |
+| **V4.3 composite daily** | **+0.39** |

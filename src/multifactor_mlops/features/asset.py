@@ -62,7 +62,9 @@ class AssetFeatureTransformer:
             vol = log_ret.rolling(window=w, min_periods=min(3, w)).std()
             vol_clean = vol.replace(0, np.nan)
 
-            # A. Momentum
+            # A. Momentum (raw log momentum + RSI + WMA distance)
+            features_dict[f'mom_{w}'] = np.log(close / close.shift(w))
+
             delta = close.diff()
             gain = (delta.where(delta > 0, 0)).rolling(window=w, min_periods=min(3, w)).mean()
             loss = (-delta.where(delta < 0, 0)).rolling(window=w, min_periods=min(3, w)).mean()

@@ -21,7 +21,7 @@ MACRO_FEATURE_NAMES = {'vix_z', 'fng_z', 'dvol_z', 'stress_score', 'macro_multip
 
 def _family_of(col: str) -> str:
     """Factor family of a feature column ('mom_rsi_7' -> 'mom_rsi')."""
-    for family in ("mom_wma_dist", "retail_flow", "margin_risk", "mom_rsi", "carry"):
+    for family in ("mom_wma_dist", "retail_flow", "margin_risk", "mom_rsi", "mom", "carry"):
         if col.startswith(family + "_"):
             return family
     return col

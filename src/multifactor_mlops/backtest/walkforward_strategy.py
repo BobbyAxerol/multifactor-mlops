@@ -150,9 +150,13 @@ class MultiFactorWalkForwardStrategy:
         return train_xgb_model(train_df, self._feature_cols, params)
 
     def _get_model(self, train_df: pd.DataFrame, params: Dict[str, Any], fold_id):
-        if self.predictions_cache is not None:
+        if self.predictions_cache is not None or self.strategy_params.get("signal_mode", "ml") == "composite":
             return None
-        key = (fold_id, tuple(sorted((k, v) for k, v in params.items() if not isinstance(v, dict))))
+
+        def _hashable(v):
+            return tuple(v) if isinstance(v, list) else v
+
+        key = (fold_id, tuple(sorted((k, _hashable(v)) for k, v in params.items() if not isinstance(v, dict))))
         if key not in self._model_cache:
             self._model_cache[key] = self._fit_model(train_df, params)
         return self._model_cache[key]
@@ -163,6 +167,20 @@ class MultiFactorWalkForwardStrategy:
             predict_xgb_model(booster, decision_rows, feature_cols),
             index=decision_rows.index,
         )
+
+    def _composite_signal(self, panel: pd.DataFrame, req_index: pd.DatetimeIndex) -> pd.DataFrame:
+        """
+        Model-free signal: per-timestamp z-score sum of configured composite
+        features (evidence-based: mom_14 + mom_30 - retail_flow_7 - margin_risk_90,
+        where retail_flow_7/margin_risk_90 are already sign-flipped in the panel).
+        """
+        cols = [c for c in self.strategy_params.get("composite_features", []) if c in panel.columns]
+        if not cols:
+            raise ValueError("signal_mode=composite requires composite_features present in the panel.")
+        z = panel[cols].groupby(level="Time").transform(lambda x: (x - x.mean()) / (x.std() + 1e-12))
+        score = z.sum(axis=1).rename("score").reset_index()
+        wide = score.pivot_table(index="Time", columns="Symbol", values="score")
+        return wide.reindex(req_index).fillna(0.0)
 
     # ------------------------------------------------------------- weights
     def _build_weights(self, preds_wide: pd.DataFrame, decision_times: pd.DatetimeIndex) -> pd.DataFrame:
@@ -249,6 +267,8 @@ class MultiFactorWalkForwardStrategy:
             cache_ts = _to_naive_index(self.predictions_cache.index)
             preds = self.predictions_cache.set_axis(cache_ts)
             preds_wide = preds.reindex(req_index).fillna(0.0)
+        elif self.strategy_params.get("signal_mode", "ml") == "composite":
+            preds_wide = self._composite_signal(panel, req_index)
         else:
             booster = self._get_model(train_df, params, fold.fold_id)
             decision_rows = panel[panel.index.get_level_values("Time").isin(req_index)]

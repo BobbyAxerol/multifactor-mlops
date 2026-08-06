@@ -97,3 +97,37 @@ def test_config_hygiene_keys():
     assert cfg.features.use_macro_features is False
     assert cfg.data.use_point_in_time_universe is True
     assert cfg.portfolio.rebalance_schedule == "monday_decide_weekly"
+
+
+def test_composite_signal_mode_no_training(tmp_path):
+    """signal_mode=composite must produce a signal WITHOUT training a model."""
+    import xgboost
+    from src.multifactor_mlops.backtest.walkforward_strategy import make_strategy_factory
+    from src.multifactor_mlops.config.schema import AppConfig
+
+    data_dict = {f"SYM{i}": _make_ohlcv(n=200, seed=i) for i in range(4)}
+    cfg = AppConfig()
+    cfg.features.keep_families = ["mom", "retail_flow", "margin_risk"]
+    cfg.features.inverted_features = ["retail_flow_7", "margin_risk_90"]
+    cfg.features.use_macro_features = False
+    params = {
+        "signal_mode": "composite",
+        "composite_features": ["mom_14", "mom_30", "retail_flow_7", "margin_risk_90"],
+        "quantiles": 4, "inverse_vol_period": 14, "allocation_cap": 0.5,
+        "volatility_ceiling": None, "rebalance_schedule": "daily", "stress_multiplier": 0.4,
+    }
+    strat = make_strategy_factory(data_dict, list(data_dict), cfg, params)
+    panel = strat._get_panel()
+    times = pd.DatetimeIndex(panel.index.get_level_values("Time").unique()).sort_values()
+    train_idx = times[:150]
+    test_idx = times[150:190]
+
+    class _Fold:
+        fold_id = 0
+        test_start = test_idx[0]
+        test_end = test_idx[-1]
+
+    out = strat.build_signal(None, params, train_idx, test_idx, _Fold())
+    assert len(strat._model_cache) == 0  # NO model trained
+    assert list(out.index) == list(test_idx)
+    assert (out.abs() > 0).any().any()

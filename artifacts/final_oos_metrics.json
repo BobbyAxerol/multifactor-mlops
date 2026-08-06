@@ -5,97 +5,97 @@
   "n_folds": 11,
   "quantbt_metrics": {
     "initial_capital": 100000.0,
-    "final_equity": 42235.454453,
-    "total_return_pct": -57.764546,
-    "cagr_pct": -28.282225,
-    "sharpe": -0.756904,
-    "sortino": -0.769168,
-    "calmar": -0.393216,
-    "omega": 0.890133,
-    "max_drawdown_pct": 71.925366,
-    "avg_drawdown_pct": 45.625079,
-    "max_dd_duration_days": 944.0,
-    "avg_dd_duration_days": 472.0,
-    "profit_factor": 0.890133,
-    "long_hitrate_pct": 42.294538,
-    "short_hitrate_pct": 41.349293,
-    "avg_win_pct": 1.27359,
-    "avg_loss_pct": -1.262961,
-    "expectancy_pct": -0.202127,
-    "num_trades": 9836.0,
+    "final_equity": 121797.264168,
+    "total_return_pct": 21.797264,
+    "cagr_pct": 7.902047,
+    "sharpe": 0.388655,
+    "sortino": 0.440001,
+    "calmar": 0.145207,
+    "omega": 1.059677,
+    "max_drawdown_pct": 54.419077,
+    "avg_drawdown_pct": 29.146582,
+    "max_dd_duration_days": 611.0,
+    "avg_dd_duration_days": 77.0,
+    "profit_factor": 1.059677,
+    "long_hitrate_pct": 42.944411,
+    "short_hitrate_pct": 44.81983,
+    "avg_win_pct": 1.465353,
+    "avg_loss_pct": -1.25206,
+    "expectancy_pct": -0.059601,
+    "num_trades": 14106.0,
     "liquidated": 0.0
   },
   "per_fold_sharpe": [
     {
       "test_start": "2024-01-01",
       "test_end": "2024-03-31",
-      "sharpe": -0.7012,
+      "sharpe": 2.2128,
       "bars": 90
     },
     {
       "test_start": "2024-04-01",
       "test_end": "2024-06-30",
-      "sharpe": 0.3258,
+      "sharpe": 1.1239,
       "bars": 90
     },
     {
       "test_start": "2024-07-01",
       "test_end": "2024-09-30",
-      "sharpe": -5.06,
+      "sharpe": -3.1794,
       "bars": 91
     },
     {
       "test_start": "2024-10-01",
       "test_end": "2024-12-31",
-      "sharpe": -0.3386,
+      "sharpe": 3.888,
       "bars": 91
     },
     {
       "test_start": "2025-01-01",
       "test_end": "2025-03-31",
-      "sharpe": -2.1293,
+      "sharpe": -2.3984,
       "bars": 89
     },
     {
       "test_start": "2025-04-01",
       "test_end": "2025-06-30",
-      "sharpe": -4.9702,
+      "sharpe": -2.4195,
       "bars": 90
     },
     {
       "test_start": "2025-07-01",
       "test_end": "2025-09-30",
-      "sharpe": -0.7703,
+      "sharpe": -2.4791,
       "bars": 91
     },
     {
       "test_start": "2025-10-01",
       "test_end": "2025-12-31",
-      "sharpe": 0.3179,
+      "sharpe": 2.2227,
       "bars": 91
     },
     {
       "test_start": "2026-01-01",
       "test_end": "2026-03-31",
-      "sharpe": 1.75,
+      "sharpe": 0.959,
       "bars": 89
     },
     {
       "test_start": "2026-04-01",
       "test_end": "2026-06-30",
-      "sharpe": 1.7677,
+      "sharpe": 2.7769,
       "bars": 90
     },
     {
       "test_start": "2026-07-01",
       "test_end": "2026-08-05",
-      "sharpe": 0.3775,
+      "sharpe": -2.8432,
       "bars": 35
     }
   ],
-  "median_fold_sharpe": -0.3386,
+  "median_fold_sharpe": 0.959,
   "oos_equity_start": 100000.0,
-  "oos_equity_end": 42235.45445288681,
+  "oos_equity_end": 121797.26416783959,
   "oos_bars": 948,
   "params": {
     "learning_rate": 0.04,
@@ -144,6 +144,7 @@
       "keep_families": [
         "mom_rsi",
         "mom_wma_dist",
+        "mom",
         "retail_flow",
         "margin_risk"
       ],
@@ -188,6 +189,13 @@
       "volatility_ceiling": 0.08,
       "rebalance_schedule": "monday_decide_weekly",
       "rebalance_threshold": 0.05,
+      "signal_mode": "composite",
+      "composite_features": [
+        "mom_14",
+        "mom_30",
+        "retail_flow_7",
+        "margin_risk_90"
+      ],
       "stress_vix_threshold": 26.0,
       "stress_fng_threshold": 20.0,
       "stress_dvol_threshold": 50.0,
@@ -210,5 +218,5 @@
       "use_funding": true
     }
   },
-  "git_sha": "4987690"
+  "git_sha": "5b1023a"
 }
