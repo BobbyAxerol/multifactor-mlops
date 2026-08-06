@@ -19,7 +19,7 @@ def test_config_loader_schema_validation():
     Test 1: AppConfig validation loads parameters.json without fallback.
     """
     app_config = load_config("parameters.json")
-    assert app_config.validation.split_mode in ["train_test_split_2024", "walk_forward_2024_90d", "walk_forward_quarterly"]
+    assert app_config.validation.split_mode in ["train_test_split_2024", "walk_forward_2024_90d", "walk_forward_quarterly", "walk_forward_2024"]
     assert app_config.data.allow_bfill is False
 
 def test_signed_portfolio_short_weights():

@@ -1,148 +1,177 @@
 """
-Stage 2 Strategy & Risk Overlay Tuning Module.
+Stage 2 Strategy & Risk Overlay Tuning Module (canonical, no leakage).
 
-Locks machine learning parameters from Stage 1 (fixed_ml_params.json) and optimizes
-portfolio construction, risk weighting, and macro risk overlay parameters using Mode 4 (mode_4_is_only_robust).
+- Locks Stage 1 ML params (artifacts/model_config.json) and OOF predictions
+  (artifacts/oof_predictions.csv) -> NO model refitting during tuning.
+- Optimizes portfolio construction / risk / overlay params by running the
+  QuantBT native walk-forward backtest on the DEVELOPMENT window ONLY
+  (2022 -> 2023-12-31) with pre-computed OOF predictions.
+- Objective: robust score = median(fold Sharpe) - 0.5 * std(fold Sharpe),
+  where per-fold Sharpe is computed from the QuantBT stitched equity curve
+  sliced to each fold's OOS window (QuantBT is the only PnL source).
+- Exceptions RAISE (no -999 masking). Best params -> artifacts/strategy_config.json.
+
+Usage:
+    poetry run python src/multifactor_mlops/optimization/stage2_strategy_tuning.py --trials 15
 """
 
 import os
 import json
+import argparse
+
 import numpy as np
 import pandas as pd
 from typing import Dict, Any, Tuple, List, Optional
 import optuna
+from optuna.samplers import TPESampler
 
-from src.multifactor_mlops.config import load_config
-from src.multifactor_mlops.data.historical_adapter import HistoricalDataAdapter
-from src.multifactor_mlops.backtest.quantbt_runner import QuantBTRunner
+from src.multifactor_mlops.config.loader import load_config
+from src.multifactor_mlops.data.loader import load_all_data
+from src.multifactor_mlops.backtest.wf_runner import WalkForwardQuantBTRunner, extract_equity
+from src.multifactor_mlops.optimization.search_space import suggest_all
+
+MODEL_CONFIG_PATH = "artifacts/model_config.json"
+OOF_PATH = "artifacts/oof_predictions.csv"
+STRATEGY_CONFIG_PATH = "artifacts/strategy_config.json"
+STRATEGY_TRIALS_PATH = "artifacts/strategy_trials.json"
+
+
+def _fold_sharpes(equity_df: pd.DataFrame, folds_meta) -> list:
+    """Per-fold Sharpe from the QuantBT equity curve sliced to fold test windows."""
+    out = []
+    eq = equity_df.set_index("time")
+    if isinstance(folds_meta, pd.DataFrame):
+        folds_meta = folds_meta.to_dict("records")
+    for f in folds_meta:
+        t_start = pd.Timestamp(f.get("test_start") or f.get("start"))
+        t_end = pd.Timestamp(f.get("test_end") or f.get("end"))
+        if t_start.tz is not None:
+            t_start = t_start.tz_localize(None)
+        if t_end.tz is not None:
+            t_end = t_end.tz_localize(None)
+        seg = eq[(eq.index >= t_start) & (eq.index < t_end)]
+        if len(seg) < 10:
+            continue
+        rets = seg["return"].dropna()
+        if rets.std() == 0 or len(rets) < 10:
+            continue
+        out.append(float(rets.mean() / rets.std() * np.sqrt(365)))
+    return out
+
 
 class Stage2StrategyOptimizer:
-    """
-    Optuna optimizer for Stage 2 strategy, position sizing, and risk overlay hyperparameters.
-    """
-
-    def __init__(self, config_path: str = "parameters.json", fixed_ml_path: str = "artifacts/models/fixed_ml_params.json"):
+    def __init__(self, config_path: str = "parameters.json"):
         self.config_path = config_path
-        self.fixed_ml_path = fixed_ml_path
         self.app_config = load_config(config_path)
-        self.runner = QuantBTRunner(quantbt_repo_path=self.app_config.data.quantbt_repo_path)
+        self.runner = WalkForwardQuantBTRunner(quantbt_repo_path=self.app_config.data.quantbt_repo_path)
 
-    def load_fixed_ml_params(self) -> Dict[str, Any]:
-        """
-        Loads fixed ML model parameters from Stage 1.
-        """
-        if os.path.exists(self.fixed_ml_path):
-            with open(self.fixed_ml_path, "r") as f:
-                fixed_ml = json.load(f)
-                print(f"[Stage 2] Loaded Fixed ML Parameters from {self.fixed_ml_path}:", fixed_ml)
-                return fixed_ml
-        else:
-            print(f"[Stage 2 Notice] {self.fixed_ml_path} not found. Using default fixed ML parameters.")
-            return {
-                "learning_rate": 0.03,
-                "max_depth": 5,
-                "colsample_bytree": 0.6,
-                "subsample": 0.6,
-                "num_boost_round": 200,
-                "train_step_days": 3
-            }
+    def _require(self, path: str):
+        if not os.path.exists(path):
+            raise FileNotFoundError(f"Missing required locked artifact {path}. Fail-fast, no silent defaults.")
 
-    def run_stage2_objective(
-        self,
-        trial: optuna.Trial,
-        raw_dict: Dict[str, pd.DataFrame],
-        base_params: Dict[str, Any],
-        fixed_ml_params: Dict[str, Any]
-    ) -> float:
-        """
-        Evaluates trial strategy parameters strictly on Mode 4 IS folds via QuantBTRunner.
-        """
-        quantiles = trial.suggest_int("quantiles", 4, 20, step=2)
-        inverse_vol_period = trial.suggest_int("inverse_vol_period", 14, 42, step=7)
-        rebalance_schedule = trial.suggest_categorical("rebalance_schedule", ["calendar_3d", "calendar_5d", "weekly_friday_exit"])
-        rebalance_thresh = trial.suggest_float("rebalance_threshold", 0.01, 0.05, step=0.01)
-        allocation_cap = trial.suggest_float("allocation_cap", 0.10, 0.35, step=0.05)
-        vol_ceiling = trial.suggest_float("volatility_ceiling", 0.04, 0.10, step=0.01)
-        stress_vix = trial.suggest_float("stress_vix_threshold", 18.0, 30.0, step=2.0)
-        stress_fng = trial.suggest_float("stress_fng_threshold", 20.0, 40.0, step=5.0)
-        stress_dvol = trial.suggest_float("stress_dvol_threshold", 50.0, 75.0, step=5.0)
-        stress_mult = trial.suggest_float("stress_multiplier", 0.2, 0.8, step=0.1)
+    def prepare(self, dev_end: str, inner_start: str, data_dir: str):
+        self._require(MODEL_CONFIG_PATH)
+        self._require(OOF_PATH)
+        with open(MODEL_CONFIG_PATH, "r") as f:
+            self.fixed_ml = json.load(f)
 
-        trial_params = base_params.copy()
-        trial_params.update(fixed_ml_params)
-        trial_params.update({
-            "quantiles": quantiles,
-            "inverse_vol_period": inverse_vol_period,
-            "rebalance_schedule": rebalance_schedule,
-            "rebalance_threshold": rebalance_thresh,
-            "allocation_cap": allocation_cap,
-            "volatility_ceiling": vol_ceiling,
-            "stress_vix_threshold": stress_vix,
-            "stress_fng_threshold": stress_fng,
-            "stress_dvol_threshold": stress_dvol,
-            "stress_multiplier": stress_mult,
-            "split_mode": base_params.get("split_mode", "walk_forward_quarterly"),
-            "optimization_mode": base_params.get("optimization_mode", "mode_4_is_only_robust"),
-            "scoring_backend": "endpoint",
-            "backend": "native_portfolio"
-        })
+        data_dict, macro_df, funding_dict, membership_df = load_all_data(
+            self.app_config, data_dir=data_dir, end_date=dev_end
+        )
+        oof = pd.read_csv(OOF_PATH, parse_dates=["Time"])
+        oof_wide = oof.pivot_table(index="Time", columns="Symbol", values="pred").sort_index()
+        return data_dict, macro_df, funding_dict, oof_wide, membership_df
 
-        try:
-            from multifactor_portfolio.training.train import run_strategy_backtest
-            _, equity_df, metrics = run_strategy_backtest(
-                data_dict=raw_dict,
-                params=trial_params,
-                local_data_dir="./data",
-                save_reports=False
-            )
+    def run_stage2_objective(self, trial: optuna.Trial, data_dict, macro_df, funding_dict, oof_wide, membership_df) -> float:
+        space = self.app_config.optimization.stage2.search_space
+        strategy_params = suggest_all(trial, space)
+        params = {**self.fixed_ml, **strategy_params}
+        funding_rate = {s: funding_dict[s] for s in data_dict if s in funding_dict} or 0.0
+        funding_wide = pd.DataFrame(funding_dict) if funding_dict else None
 
-            qbt_sharpe = float(metrics.get("sharpe_ratio", 0.0))
-            return qbt_sharpe
-        except Exception as e:
-            print(f"Notice: Stage 2 Trial {trial.number} failed with error: {e}")
-            return -999.0
+        qbt_res = self.runner.run(
+            data_dict=data_dict,
+            symbols=list(data_dict.keys()),
+            app_config=self.app_config,
+            params=params,
+            macro_df=macro_df,
+            funding_rate=funding_rate,
+            funding_wide=funding_wide,
+            universe_membership_df=membership_df,
+            split_mode="walk_forward_2022",
+            split_frequency="quarterly",
+            window_mode="expanding",
+            predictions_cache=oof_wide,
+        )
+        equity_df = extract_equity(qbt_res, initial_capital=self.app_config.backtest.initial_capital)
+        wf_meta = qbt_res.metadata.get("walk_forward", {}) if hasattr(qbt_res, "metadata") else {}
+        folds_meta = wf_meta.get("fold_table", [])
+        fold_sharpes = _fold_sharpes(equity_df, folds_meta)
+        if not fold_sharpes:
+            raise ValueError("Stage2 trial: no fold Sharpe computed.")
+        return float(np.median(fold_sharpes) - 0.5 * np.std(fold_sharpes))
 
     def optimize(
         self,
-        raw_dict: Dict[str, pd.DataFrame],
-        n_trials: int = 30,
-        output_dir: str = "artifacts/models"
-    ) -> Tuple[Dict[str, Any], float]:
-        """
-        Runs Stage 2 Optuna optimization for strategy parameters using Mode 4.
-        Saves best parameters to output_dir/best_strategy_params.json.
-        """
-        fixed_ml_params = self.load_fixed_ml_params()
+        n_trials: Optional[int] = None,
+        dev_end: Optional[str] = None,
+        inner_start: Optional[str] = None,
+        data_dir: str = "./data",
+        output_dir: str = "artifacts",
+        storage_uri: Optional[str] = None,
+    ) -> tuple:
+        tc = self.app_config.optimization.stage2
+        n_trials = n_trials or tc.n_trials
+        dev_end = dev_end or tc.dev_end
+        inner_start = inner_start or tc.inner_start
+        storage_uri = storage_uri or tc.storage_uri
 
-        with open(self.config_path, 'r') as f:
-            base_params = json.load(f)
+        data_dict, macro_df, funding_dict, oof_wide, membership_df = self.prepare(dev_end, inner_start, data_dir)
 
-        study = optuna.create_study(direction="maximize", study_name="stage2_strategy_tuning")
+        if storage_uri:
+            os.makedirs(os.path.dirname(storage_uri.replace("sqlite:///", "")), exist_ok=True)
+        study = optuna.create_study(
+            direction="maximize",
+            study_name="stage2_strategy_tuning",
+            sampler=TPESampler(seed=tc.random_seed),
+            storage=storage_uri,
+            load_if_exists=True,
+        )
 
         def objective(trial):
-            return self.run_stage2_objective(trial, raw_dict, base_params, fixed_ml_params)
+            return self.run_stage2_objective(trial, data_dict, macro_df, funding_dict, oof_wide, membership_df)
 
         study.optimize(objective, n_trials=n_trials)
 
-        best_trial = study.best_trial
-        best_strategy = best_trial.params
-        best_sharpe = best_trial.value
-
-        combined_best = fixed_ml_params.copy()
-        combined_best.update(best_strategy)
+        best_strategy = study.best_params
+        combined = {**self.fixed_ml, **best_strategy}
 
         os.makedirs(output_dir, exist_ok=True)
-        artifact_path = os.path.join(output_dir, "best_strategy_params.json")
-        with open(artifact_path, "w") as f:
-            json.dump(combined_best, f, indent=2)
+        with open(os.path.join(output_dir, "strategy_config.json"), "w") as f:
+            json.dump(combined, f, indent=2)
+        trials = [
+            {"number": t.number, "value": t.value, "params": t.params}
+            for t in study.trials if t.value is not None
+        ]
+        with open(os.path.join(output_dir, "strategy_trials.json"), "w") as f:
+            json.dump(trials, f, indent=2)
 
-        print(f"\n[Stage 2 Complete] Best Strategy Parameters saved to: {artifact_path}")
-        print(f"Best Mode 4 QuantBT Sharpe Ratio: {best_sharpe:.4f}")
-        print("Best Strategy Parameters:", json.dumps(combined_best, indent=2))
-        return combined_best, best_sharpe
+        print(f"\n[Stage 2 Complete] Best robust score: {study.best_value:.4f}")
+        print(f"[Stage 2] Locked -> {STRATEGY_CONFIG_PATH}")
+        print(json.dumps(combined, indent=2))
+        return combined, study.best_value
+
 
 if __name__ == "__main__":
-    adapter = HistoricalDataAdapter()
-    data = adapter.load_ohlcv_data()
-    optimizer = Stage2StrategyOptimizer()
-    best_params, best_sharpe = optimizer.optimize(raw_dict=data, n_trials=30)
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--trials", type=int, default=None)
+    parser.add_argument("--dev-end", default="2023-12-31")
+    parser.add_argument("--inner-start", default="2022-01-01")
+    parser.add_argument("--data-dir", default="./data")
+    args = parser.parse_args()
+    Stage2StrategyOptimizer().optimize(
+        n_trials=args.trials,
+        dev_end=args.dev_end,
+        inner_start=args.inner_start,
+        data_dir=args.data_dir,
+    )

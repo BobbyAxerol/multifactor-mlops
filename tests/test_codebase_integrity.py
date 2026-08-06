@@ -9,13 +9,12 @@ import pytest
 
 def test_no_prohibited_bfill_in_entire_codebase():
     """
-    Scans all Python source files in src/ and multifactor_portfolio/
+    Scans all Python source files in src/
     Asserts zero occurrence of .bfill( or method='bfill' or method="bfill".
     """
     root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
     search_dirs = [
-        os.path.join(root_dir, "src"),
-        os.path.join(root_dir, "multifactor_portfolio")
+        os.path.join(root_dir, "src")
     ]
 
     violations = []

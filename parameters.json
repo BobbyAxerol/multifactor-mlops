@@ -1,57 +1,133 @@
 {
-  "features": {
-    "model_type": "xgboost",
-    "learning_rate": 0.07,
-    "max_depth": 5,
-    "num_leaves": 15,
-    "num_boost_round": 100,
-    "colsample_bytree": 0.3,
-    "subsample": 0.8,
-    "train_step_days": 4
+  "run": {
+    "seed": 42,
+    "timezone": "UTC",
+    "fail_fast": true,
+    "production_cutoff": null
   },
-  "dataset": {
+  "data": {
     "asset_class": "crypto",
     "universe_name": "binance_daily",
     "top_n_symbols": 40,
     "data_repo_path": "/root/bobby/pool_alpha/alphas_storage/_get_data",
-    "quantbt_repo_path": "/root/bobby/pool_alpha/quantbt"
+    "quantbt_repo_path": "/root/bobby/pool_alpha/quantbt",
+    "allow_bfill": false,
+    "use_point_in_time_universe": true,
+    "universe_lookback_days": 30,
+    "universe_min_history_days": 180
   },
-  "training": {
-    "split_mode": "walk_forward_quarterly",
-    "initial_capital": 100000.0,
-    "leverage": 3.0,
-    "allocation_cap": 0.25,
-    "volatility_ceiling": 0.08,
-    "fee": 0.0005,
-    "slippage": 0.0001,
-    "lag": 1,
+  "features": {
+    "windows": [7, 14, 30, 60, 90],
     "quantiles": 16,
-    "trading_days_per_year": 365,
-    "train_step_days": 4,
+    "warmup_policy": "drop",
+    "missing_policy": "preserve",
+    "keep_families": ["mom_rsi", "mom_wma_dist", "mom", "retail_flow", "margin_risk"],
+    "inverted_features": ["retail_flow_7", "margin_risk_90"],
+    "use_macro_features": false
+  },
+  "label": {
+    "return_type": "next_close_to_close",
+    "holding_bars": 1,
+    "cross_sectional_demean": true
+  },
+  "model": {
+    "model_type": "xgboost",
+    "learning_rate": 0.07,
+    "max_depth": 5,
+    "num_boost_round": 100,
+    "colsample_bytree": 0.3,
+    "subsample": 0.8,
+    "random_state": 42,
+    "train_step_days": 4
+  },
+  "validation": {
+    "split_mode": "walk_forward_2024",
+    "split_frequency": "quarterly",
+    "window_mode": "expanding",
+    "train_window": null,
+    "min_train_bars": 120,
+    "min_test_bars": 20,
+    "first_oos_date": "2024-01-01",
+    "outer_test_period": "quarterly",
+    "purge_bars": 1,
+    "embargo_bars": 1,
+    "unsupported_split_policy": "raise"
+  },
+  "portfolio": {
+    "quantiles": 16,
+    "allocation_cap": 0.25,
     "inverse_vol_period": 42,
-    "rebalance_schedule": "weekly_friday_exit",
+    "volatility_ceiling": 0.08,
+    "rebalance_schedule": "daily",
     "rebalance_threshold": 0.05,
+    "signal_mode": "composite",
+    "composite_features": ["mom_14", "mom_30", "retail_flow_7", "margin_risk_90"],
     "stress_vix_threshold": 26.0,
     "stress_fng_threshold": 20.0,
     "stress_dvol_threshold": 50.0,
     "stress_multiplier": 0.4,
-    "backend": "native_portfolio",
     "portfolio_mode": "longshort",
     "hedge_type": "target_weight"
   },
+  "backtest": {
+    "engine": "quantbt",
+    "backend": "native_portfolio",
+    "portfolio_mode": "longshort",
+    "hedge_type": "target_weight",
+    "allow_engine_fallback": false,
+    "initial_capital": 100000.0,
+    "leverage": 3.0,
+    "fee_rate_per_fill": 0.0005,
+    "fee": 0.001,
+    "slippage": 0.0001,
+    "trading_days_per_year": 365,
+    "use_funding": true
+  },
   "optimization": {
-    "split_mode": "walk_forward_quarterly",
-    "split_frequency": "single",
+    "split_mode": "walk_forward_2024",
+    "split_frequency": "quarterly",
+    "window_mode": "expanding",
     "start_year": 2024,
-    "n_trials": 50,
-    "optuna_early_stopping": 50,
-    "optimization_mode": "mode_4_is_only_robust",
+    "dev_end": "2023-12-31",
+    "n_trials": 30,
     "random_seed": 42,
+    "optimization_mode": "mode_4_is_only_robust",
+    "stage1": {
+      "n_trials": 30,
+      "random_seed": 42,
+      "storage_uri": "sqlite:///artifacts/optuna/stage1.db",
+      "dev_end": "2023-12-31",
+      "inner_start": "2022-01-01",
+      "frequency": "quarterly",
+      "search_space": {
+        "learning_rate": {"low": 0.01, "high": 0.10, "step": 0.01},
+        "max_depth": {"low": 2, "high": 6},
+        "colsample_bytree": {"low": 0.2, "high": 0.8, "step": 0.1},
+        "subsample": {"low": 0.5, "high": 1.0, "step": 0.1},
+        "num_boost_round": {"low": 50, "high": 200, "step": 25}
+      }
+    },
+    "stage2": {
+      "n_trials": 15,
+      "random_seed": 42,
+      "storage_uri": "sqlite:///artifacts/optuna/stage2.db",
+      "dev_end": "2023-12-31",
+      "inner_start": "2022-01-01",
+      "search_space": {
+        "quantiles": {"low": 4, "high": 20, "step": 2},
+        "inverse_vol_period": {"low": 14, "high": 42, "step": 7},
+        "rebalance_schedule": ["monday_decide_weekly", "daily", "calendar_3d", "weekly_friday_exit"],
+        "rebalance_threshold": {"low": 0.01, "high": 0.05, "step": 0.01},
+        "allocation_cap": {"low": 0.10, "high": 0.35, "step": 0.05},
+        "volatility_ceiling": {"low": 0.04, "high": 0.10, "step": 0.01},
+        "stress_multiplier": {"low": 0.2, "high": 0.8, "step": 0.1}
+      }
+    },
     "_available_split_modes": [
-      "walk_forward_quarterly",
-      "train_test_split_2024",
+      "walk_forward_2024",
       "walk_forward_2023",
-      "walk_forward_2024"
+      "walk_forward_2022",
+      "train_test_split_2024"
     ],
     "_available_optimization_modes": [
       "mode_1_decay",
@@ -96,19 +172,16 @@
       "model_type",
       "learning_rate",
       "max_depth",
-      "num_leaves",
       "num_boost_round",
       "colsample_bytree",
       "top_n_symbols",
-      "fee",
+      "fee_rate_per_fill",
       "slippage",
       "leverage",
       "allocation_cap",
-      "lag",
       "quantiles",
       "asset_class",
       "universe_name",
-      "train_step_days",
       "inverse_vol_period",
       "stress_vix_threshold",
       "stress_fng_threshold",

@@ -1,0 +1,15 @@
+{
+  "learning_rate": 0.04,
+  "max_depth": 6,
+  "colsample_bytree": 0.7,
+  "subsample": 0.8,
+  "num_boost_round": 75,
+  "random_state": 42,
+  "quantiles": 6,
+  "inverse_vol_period": 28,
+  "rebalance_schedule": "daily",
+  "rebalance_threshold": 0.02,
+  "allocation_cap": 0.25,
+  "volatility_ceiling": 0.07,
+  "stress_multiplier": 0.30000000000000004
+}
