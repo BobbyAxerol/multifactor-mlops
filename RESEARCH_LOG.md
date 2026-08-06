@@ -168,3 +168,39 @@ poetry run pytest tests/ -q
 |---|---|---|
 | V4.4 composite (tuning chưa seed) | +0.30 | -23.0% |
 | **V4.5 composite (tuning chuẩn hoá)** | **+0.65** | -32.8% |
+
+---
+
+## V4.6 — Audit look-ahead + tìm điểm cải thiện (exp_60)
+
+### (1) LOOK-AHEAD: KHÔNG CÓ ✅
+Future-mutation test: mutate toàn bộ price sau cutoff 2025-06-30 → weights ≤ cutoff **giống hệt** (max diff 0.0). Toàn chuỗi: feature trailing, rank per-timestamp, universe lagged, shift(1), label close-to-close khớp engine — sạch.
+
+### (2) PHÁT HIỆN BUG NGHIÊM TRỌNG: WF endpoint KHÔNG áp slippage
+- `quantbt/endpoint.py` chỉ convert legacy `slippage` cho mode `portfolio`, **không cho `walk_forward`** → mọi kết quả WF trước đây chạy với slippage_bps=0 (sum slippage 0 vs $8k ở path trực tiếp).
+- Fix KHÔNG đụng engine: wf_runner truyền `execution=ExecutionConfig(slippage_bps=1)` explicit.
+- **Sau fix: OOS pipeline = Sharpe +0.568, +38.8%, MaxDD -33.6%** (trước +0.655 ảo).
+
+### (3) FOLD-BOUNDARY ARTIFACT: quarterly vs single-fold
+- Quarterly stitched == single-fold EXACTLY, trừ 10 ngày đầu quý (0 thay vì giữ vị thế) — 10 ngày flat đó ăn ~24k (grid-luck, không phải edge).
+- Cùng positions: WF single +0.431 (no-slip) / continuous +0.222 (có slip) — chênh còn lại là 10 ngày flat.
+
+### (4) VARIANTS (slippage áp đủ, dev + OOS):
+| Variant | DEV Sharpe | OOS Sharpe | OOS final | OOS MDD |
+|---|---|---|---|---|
+| base (stress 0.3) | +0.016 | +0.222 | 105.1k | -48.8% |
+| **deepstress (0.15)** | -0.017 | **+0.596** | **149.9k** | **-35.9%** |
+| nooverlay | -0.733 | +0.302 | 107.7k | -44.4% |
+| drift (hysteresis) | -0.021 | +0.239 | 106.5k | -47.6% |
+| voltarget | +0.145 | +0.209 | 104.2k | -47.2% |
+| dispersion gate | -0.243 | +0.053 | 95.6k | -44.2% |
+| asymmetric legs | +0.142 | +0.229 | 102.5k | -57.6% |
+
+- Overlay CÓ giá trị trên dev (base +0.02 vs nooverlay -0.73) nhưng hơi hại OOS (+0.22 vs +0.30).
+- deepstress thắng lớn OOS nhưng KHÔNG thắng dev → không đủ cơ sở chọn (regime-dependent, đúng cái bẫy dev/OOS).
+- drift/dispersion/voltarget/asymmetric: không cải thiện.
+
+### Kết luận
+1. Config tốt nhất sạch look-ahead; con số trung thực với slippage: **+0.22 → +0.57** (tùy grid).
+2. Funding thực tế ≈ 0 (cache funding gần như rỗng cho các symbol này) — cần thu thập funding lịch sử thật.
+3. Không có variant nào vừa thắng dev vừa thắng OOS → giữ nguyên config hiện tại; chờ nguồn dữ liệu mới (OI/LS) là hướng có cơ sở.

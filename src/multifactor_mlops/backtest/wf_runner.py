@@ -38,7 +38,9 @@ class WalkForwardQuantBTRunner:
             sys.path.append("/root/bobby/pool_alpha")
         try:
             from quantbt.endpoint import QuantBTEndpoint
+            from quantbt.core.schema import ExecutionConfig
             self.QuantBTEndpoint = QuantBTEndpoint
+            self.ExecutionConfig = ExecutionConfig
         except ImportError as e:
             raise QuantBTExecutionError(f"Failed to import QuantBTEndpoint from {self.quantbt_repo_path}: {e}")
 
@@ -109,6 +111,10 @@ class WalkForwardQuantBTRunner:
         )
 
         try:
+            # IMPORTANT: the walk_forward endpoint only converts the legacy
+            # `slippage` kwarg for mode 'portfolio' (not 'walk_forward') and would
+            # silently run with slippage_bps=0. Pass ExecutionConfig explicitly.
+            execution = self.ExecutionConfig(slippage_bps=float(bc.slippage) * 10_000.0)
             bt = self.QuantBTEndpoint.walk_forward(
                 strategy_class=strategy,
                 split_mode=split_mode or vc.split_mode,
@@ -123,7 +129,7 @@ class WalkForwardQuantBTRunner:
                 initial_capital=float(bc.initial_capital),
                 leverage=float(bc.leverage),
                 fee_rate=float(bc.fee_rate_per_fill),
-                slippage=float(bc.slippage),
+                execution=execution,
                 use_funding=bool(bc.use_funding),
                 funding_rate=funding_rate if funding_rate is not None else 0.0,
                 contract_size=1.0,

@@ -5,23 +5,23 @@
   "n_folds": 11,
   "quantbt_metrics": {
     "initial_capital": 100000.0,
-    "final_equity": 148574.534915,
-    "total_return_pct": 48.574535,
-    "cagr_pct": 16.497743,
-    "sharpe": 0.65457,
-    "sortino": 0.69997,
-    "calmar": 0.5035,
-    "omega": 1.104183,
-    "max_drawdown_pct": 32.766106,
-    "avg_drawdown_pct": 14.245787,
-    "max_dd_duration_days": 549.0,
-    "avg_dd_duration_days": 61.0,
-    "profit_factor": 1.104183,
-    "long_hitrate_pct": 47.7449,
-    "short_hitrate_pct": 50.574651,
+    "final_equity": 138809.46726,
+    "total_return_pct": 38.809467,
+    "cagr_pct": 13.482751,
+    "sharpe": 0.568098,
+    "sortino": 0.607252,
+    "calmar": 0.401186,
+    "omega": 1.089793,
+    "max_drawdown_pct": 33.607244,
+    "avg_drawdown_pct": 15.443877,
+    "max_dd_duration_days": 611.0,
+    "avg_dd_duration_days": 65.0,
+    "profit_factor": 1.089793,
+    "long_hitrate_pct": 47.392564,
+    "short_hitrate_pct": 50.288158,
     "avg_win_pct": 1.140857,
-    "avg_loss_pct": -1.053041,
-    "expectancy_pct": 0.025474,
+    "avg_loss_pct": -1.053511,
+    "expectancy_pct": 0.018227,
     "num_trades": 31959.0,
     "liquidated": 0.0
   },
@@ -29,73 +29,73 @@
     {
       "test_start": "2024-01-01",
       "test_end": "2024-03-31",
-      "sharpe": 2.9487,
+      "sharpe": 2.8463,
       "bars": 90
     },
     {
       "test_start": "2024-04-01",
       "test_end": "2024-06-30",
-      "sharpe": 1.5458,
+      "sharpe": 1.4771,
       "bars": 90
     },
     {
       "test_start": "2024-07-01",
       "test_end": "2024-09-30",
-      "sharpe": -2.0917,
+      "sharpe": -2.1608,
       "bars": 91
     },
     {
       "test_start": "2024-10-01",
       "test_end": "2024-12-31",
-      "sharpe": 4.0403,
+      "sharpe": 3.9537,
       "bars": 91
     },
     {
       "test_start": "2025-01-01",
       "test_end": "2025-03-31",
-      "sharpe": -0.2543,
+      "sharpe": -0.3182,
       "bars": 89
     },
     {
       "test_start": "2025-04-01",
       "test_end": "2025-06-30",
-      "sharpe": -1.1441,
+      "sharpe": -1.2504,
       "bars": 90
     },
     {
       "test_start": "2025-07-01",
       "test_end": "2025-09-30",
-      "sharpe": -1.7436,
+      "sharpe": -1.8439,
       "bars": 91
     },
     {
       "test_start": "2025-10-01",
       "test_end": "2025-12-31",
-      "sharpe": 1.8232,
+      "sharpe": 1.7511,
       "bars": 91
     },
     {
       "test_start": "2026-01-01",
       "test_end": "2026-03-31",
-      "sharpe": 0.3969,
+      "sharpe": 0.318,
       "bars": 89
     },
     {
       "test_start": "2026-04-01",
       "test_end": "2026-06-30",
-      "sharpe": 2.2143,
+      "sharpe": 2.1161,
       "bars": 90
     },
     {
       "test_start": "2026-07-01",
       "test_end": "2026-08-05",
-      "sharpe": -3.6422,
+      "sharpe": -3.8011,
       "bars": 35
     }
   ],
-  "median_fold_sharpe": 0.3969,
+  "median_fold_sharpe": 0.318,
   "oos_equity_start": 100000.0,
-  "oos_equity_end": 148574.5349149785,
+  "oos_equity_end": 138809.467259818,
   "oos_bars": 948,
   "params": {
     "learning_rate": 0.04,
@@ -306,5 +306,5 @@
       }
     }
   },
-  "git_sha": "2e204c2"
+  "git_sha": "eed9f95"
 }
