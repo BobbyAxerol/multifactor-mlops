@@ -1,0 +1,197 @@
+[
+  {
+    "number": 0,
+    "value": -1.7782221761396833,
+    "params": {
+      "quantiles": 10,
+      "inverse_vol_period": 42,
+      "rebalance_schedule": "monday_decide_weekly",
+      "rebalance_threshold": 0.01,
+      "allocation_cap": 0.35,
+      "volatility_ceiling": 0.08,
+      "stress_multiplier": 0.6000000000000001
+    }
+  },
+  {
+    "number": 1,
+    "value": -1.6534604189498505,
+    "params": {
+      "quantiles": 4,
+      "inverse_vol_period": 42,
+      "rebalance_schedule": "monday_decide_weekly",
+      "rebalance_threshold": 0.02,
+      "allocation_cap": 0.25,
+      "volatility_ceiling": 0.07,
+      "stress_multiplier": 0.4
+    }
+  },
+  {
+    "number": 2,
+    "value": -0.28966062282524907,
+    "params": {
+      "quantiles": 14,
+      "inverse_vol_period": 14,
+      "rebalance_schedule": "weekly_friday_exit",
+      "rebalance_threshold": 0.01,
+      "allocation_cap": 0.25,
+      "volatility_ceiling": 0.08,
+      "stress_multiplier": 0.2
+    }
+  },
+  {
+    "number": 3,
+    "value": -1.3589977183025281,
+    "params": {
+      "quantiles": 14,
+      "inverse_vol_period": 14,
+      "rebalance_schedule": "calendar_3d",
+      "rebalance_threshold": 0.02,
+      "allocation_cap": 0.1,
+      "volatility_ceiling": 0.08,
+      "stress_multiplier": 0.5
+    }
+  },
+  {
+    "number": 4,
+    "value": 0.4747293231397539,
+    "params": {
+      "quantiles": 6,
+      "inverse_vol_period": 28,
+      "rebalance_schedule": "daily",
+      "rebalance_threshold": 0.02,
+      "allocation_cap": 0.25,
+      "volatility_ceiling": 0.07,
+      "stress_multiplier": 0.30000000000000004
+    }
+  },
+  {
+    "number": 5,
+    "value": -1.763397333976611,
+    "params": {
+      "quantiles": 20,
+      "inverse_vol_period": 35,
+      "rebalance_schedule": "monday_decide_weekly",
+      "rebalance_threshold": 0.01,
+      "allocation_cap": 0.15000000000000002,
+      "volatility_ceiling": 0.04,
+      "stress_multiplier": 0.4
+    }
+  },
+  {
+    "number": 6,
+    "value": -2.210716846841767,
+    "params": {
+      "quantiles": 10,
+      "inverse_vol_period": 21,
+      "rebalance_schedule": "monday_decide_weekly",
+      "rebalance_threshold": 0.01,
+      "allocation_cap": 0.30000000000000004,
+      "volatility_ceiling": 0.04,
+      "stress_multiplier": 0.8
+    }
+  },
+  {
+    "number": 7,
+    "value": -0.3352085441718361,
+    "params": {
+      "quantiles": 16,
+      "inverse_vol_period": 14,
+      "rebalance_schedule": "daily",
+      "rebalance_threshold": 0.04,
+      "allocation_cap": 0.1,
+      "volatility_ceiling": 0.06,
+      "stress_multiplier": 0.2
+    }
+  },
+  {
+    "number": 8,
+    "value": -1.606136537463585,
+    "params": {
+      "quantiles": 18,
+      "inverse_vol_period": 35,
+      "rebalance_schedule": "monday_decide_weekly",
+      "rebalance_threshold": 0.04,
+      "allocation_cap": 0.25,
+      "volatility_ceiling": 0.1,
+      "stress_multiplier": 0.5
+    }
+  },
+  {
+    "number": 9,
+    "value": -1.4259888884826948,
+    "params": {
+      "quantiles": 6,
+      "inverse_vol_period": 35,
+      "rebalance_schedule": "calendar_3d",
+      "rebalance_threshold": 0.03,
+      "allocation_cap": 0.2,
+      "volatility_ceiling": 0.04,
+      "stress_multiplier": 0.2
+    }
+  },
+  {
+    "number": 10,
+    "value": -1.0727352048115737,
+    "params": {
+      "quantiles": 8,
+      "inverse_vol_period": 28,
+      "rebalance_schedule": "daily",
+      "rebalance_threshold": 0.05,
+      "allocation_cap": 0.35,
+      "volatility_ceiling": 0.1,
+      "stress_multiplier": 0.8
+    }
+  },
+  {
+    "number": 11,
+    "value": 0.09146184415970526,
+    "params": {
+      "quantiles": 14,
+      "inverse_vol_period": 21,
+      "rebalance_schedule": "weekly_friday_exit",
+      "rebalance_threshold": 0.02,
+      "allocation_cap": 0.2,
+      "volatility_ceiling": 0.06,
+      "stress_multiplier": 0.30000000000000004
+    }
+  },
+  {
+    "number": 12,
+    "value": -0.03681551314860787,
+    "params": {
+      "quantiles": 12,
+      "inverse_vol_period": 21,
+      "rebalance_schedule": "weekly_friday_exit",
+      "rebalance_threshold": 0.02,
+      "allocation_cap": 0.2,
+      "volatility_ceiling": 0.06,
+      "stress_multiplier": 0.30000000000000004
+    }
+  },
+  {
+    "number": 13,
+    "value": 0.157424804765247,
+    "params": {
+      "quantiles": 4,
+      "inverse_vol_period": 28,
+      "rebalance_schedule": "daily",
+      "rebalance_threshold": 0.03,
+      "allocation_cap": 0.15000000000000002,
+      "volatility_ceiling": 0.06,
+      "stress_multiplier": 0.30000000000000004
+    }
+  },
+  {
+    "number": 14,
+    "value": -0.10646615620694022,
+    "params": {
+      "quantiles": 4,
+      "inverse_vol_period": 28,
+      "rebalance_schedule": "daily",
+      "rebalance_threshold": 0.03,
+      "allocation_cap": 0.15000000000000002,
+      "volatility_ceiling": 0.05,
+      "stress_multiplier": 0.30000000000000004
+    }
+  }
+]

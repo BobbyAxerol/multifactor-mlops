@@ -18,9 +18,9 @@
 - Before committing, check the repository status and avoid staging unrelated user work from other repositories.
 - Before committing, verify `git config user.name` and `git config user.email`; never commit with a system/default identity. Use the user's configured git identity for that repository.
 - Commit messages should briefly name the subsystem and the concrete behavior fixed or added.
-- Always commit every change to a feature/dev branch, and never commit directly to the `main` branch.
+- Always commit every change to a feature/dev branch, and never comxmit directly to the `main` branch.
 - Never implement major refactors or change the implementation direction without obtaining the user's explicit approval first.
 - After every major code change, always review the entire integration flow to ensure all components are fully adapted, checking for logic errors and synchronization across files.
-
+- chỉ đọc quantbt, bạn không có quyền sửa quantbt nhé, tuyệt đối không nhé
 
 

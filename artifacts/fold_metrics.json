@@ -1,0 +1,57 @@
+{
+  "folds": [
+    {
+      "fold_id": 0,
+      "rank_ic": 0.02042891902508579,
+      "rows": 3600
+    },
+    {
+      "fold_id": 1,
+      "rank_ic": -0.0046029296483067385,
+      "rows": 3640
+    },
+    {
+      "fold_id": 2,
+      "rank_ic": 0.04744326225394858,
+      "rows": 3680
+    },
+    {
+      "fold_id": 3,
+      "rank_ic": -0.008616365080774633,
+      "rows": 3680
+    },
+    {
+      "fold_id": 4,
+      "rank_ic": 0.0008734141622117564,
+      "rows": 3600
+    },
+    {
+      "fold_id": 5,
+      "rank_ic": 0.024812135056033306,
+      "rows": 3640
+    },
+    {
+      "fold_id": 6,
+      "rank_ic": 0.019413408259644462,
+      "rows": 3680
+    },
+    {
+      "fold_id": 7,
+      "rank_ic": 0.005441886612719164,
+      "rows": 3600
+    }
+  ],
+  "overall_rank_ic": 0.01411367652940014,
+  "model_config": {
+    "learning_rate": 0.04,
+    "max_depth": 6,
+    "colsample_bytree": 0.7,
+    "subsample": 0.8,
+    "num_boost_round": 75,
+    "random_state": 42
+  },
+  "dev_window": [
+    "2022-01-01",
+    "2023-12-31"
+  ]
+}

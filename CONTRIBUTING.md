@@ -21,11 +21,11 @@ Thank you for your interest in contributing to the **Multifactor Portfolio** pro
 3. Write modular, documented Python code adhering to PEP 8 standards.
 4. Ensure all unit tests pass:
    ```bash
-   poetry run pytest multifactor_portfolio/training/test_train.py
+   poetry run pytest tests/ -q
    ```
 5. Format code with `black`:
    ```bash
-   poetry run black multifactor_portfolio/
+   poetry run black src/multifactor_mlops/ tests/
    ```
 6. Submit a Pull Request following the [PR Template](.github/PULL_REQUEST_TEMPLATE.md).
 
@@ -42,5 +42,5 @@ Thank you for your interest in contributing to the **Multifactor Portfolio** pro
 
 ## 🧪 Testing Guidelines
 
-* Every new factor calculation or data pipeline modification must include unit tests in `multifactor_portfolio/training/test_train.py`.
+* Every new factor calculation or data pipeline modification must include unit tests in `tests/`.
 * Tests must pass cleanly with zero errors before merging.

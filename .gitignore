@@ -9,6 +9,7 @@ performance_report.txt
 universe_symbols.json
 .pytest_cache/
 .optuna_logs/
+artifacts/optuna/
 logs/
 data/
 *.csv.gz

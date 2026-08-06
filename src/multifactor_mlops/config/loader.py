@@ -1,5 +1,9 @@
 """
 Configuration loader that validates parameters.json against Pydantic AppConfig schema.
+
+Canonical structure (sections): run / data / features / label / model / validation /
+portfolio / backtest / optimization / mode_*. Any other top-level key is preserved
+for optimization/registration but ignored by AppConfig.
 """
 
 import json
@@ -22,36 +26,43 @@ def load_config(config_input: Union[str, Dict[str, Any]]) -> AppConfig:
     else:
         raise TypeError(f"config_input must be a file path or dict, got {type(config_input)}")
 
-    # Handle flat or nested JSON structure
-    if "data" in raw_data or "validation" in raw_data:
+    # Canonical sectioned structure
+    if "data" in raw_data:
         return AppConfig.model_validate(raw_data)
 
-    # Flattened JSON mapping fallback
+    # Backward-compatible flattened JSON mapping fallback (old parameters.json layouts)
     flat_data = {
         "data": raw_data.get("dataset", raw_data),
         "features": raw_data.get("features", raw_data),
+        "label": raw_data.get("label", raw_data),
+        "model": raw_data.get("model", raw_data),
         "validation": raw_data.get("training", raw_data.get("validation", raw_data)),
         "portfolio": raw_data.get("training", raw_data.get("portfolio", raw_data)),
-        "backtest": raw_data.get("training", raw_data.get("backtest", raw_data)),
-        "model": raw_data.get("model", raw_data)
+        "backtest": raw_data.get("training", raw_data.get("backtest", raw_data))
     }
     return AppConfig.model_validate(flat_data)
 
+FLATTEN_SECTIONS = [
+    'run', 'data', 'dataset', 'features', 'label', 'model',
+    'validation', 'portfolio', 'backtest', 'training'
+]
+
 def flatten_params(params: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Flattens nested parameter sections (features, dataset, training) into top-level key-value pairs.
-    Top-level explicit keys override sub-dictionary keys.
+    Flattens nested parameter sections into top-level key-value pairs for legacy
+    consumers (params.get(...)). Later sections override earlier ones; explicit
+    top-level keys override section keys.
     """
     if not isinstance(params, dict):
         return {}
 
     flat = {}
-    for section in ['dataset', 'features', 'training', 'model', 'portfolio', 'backtest', 'validation', 'data']:
+    for section in FLATTEN_SECTIONS:
         if section in params and isinstance(params[section], dict):
             flat.update(params[section])
 
     for k, v in params.items():
-        if k not in ['dataset', 'features', 'training', 'model', 'portfolio', 'backtest', 'validation', 'data']:
+        if k not in FLATTEN_SECTIONS:
             flat[k] = v
 
     return flat

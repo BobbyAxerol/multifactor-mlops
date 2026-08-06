@@ -110,6 +110,29 @@ class PortfolioConstructor:
 
         return scheduled_weights
 
+    @staticmethod
+    def apply_monday_decide_schedule(weights_df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Low-turnover weekly schedule (research V4.1, evidence-backed):
+        decision made at MONDAY close -> position held on Tue-Fri rows
+        (executed at their closes), flat on Sat/Sun/Mon. Includes the 1-bar
+        execution lag by construction (Monday info trades from Tuesday close).
+        """
+        if weights_df.empty:
+            return weights_df.copy()
+        out = pd.DataFrame(0.0, index=weights_df.index, columns=weights_df.columns)
+        idx = weights_df.index
+        monday_positions = np.where(idx.dayofweek == 0)[0]
+        if len(monday_positions) == 0:
+            return out
+        monday_idx = pd.DatetimeIndex(idx[monday_positions])
+        for i, dt in enumerate(idx):
+            if dt.dayofweek in [1, 2, 3, 4]:
+                pos = monday_idx.searchsorted(dt, side="right") - 1
+                if pos >= 0:
+                    out.iloc[i] = weights_df.iloc[monday_positions[pos]]
+        return out
+
     def apply_risk_weights_and_constraints(
         self,
         target_signs: pd.DataFrame,

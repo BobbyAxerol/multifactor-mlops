@@ -46,36 +46,29 @@ flowchart TD
 ```
 multifactor_portfo/
 ├── .github/
-│   ├── workflows/ci.yml           # Automated CI/CD pipeline
-│   ├── PULL_REQUEST_TEMPLATE.md   # GitHub PR template
-│   └── ISSUE_TEMPLATE/            # Bug report and feature request templates
-├── data/                          # Cached market data CSVs
-├── multifactor_portfolio/
-│   ├── optimization/
-│   │   └── optuna_kernel.py       # Optuna hyperparameter tuning kernel
-│   ├── register/
-│   │   └── register_model.py     # MLflow PyFunc model serving wrapper
-│   ├── research/
-│   │   ├── feature_analysis.py    # OLS, MI Score & XGBoost Gain feature selector
-│   │   └── selected_features.json # Selected active asset features
-│   ├── training/
-│   │   ├── train.py               # Walk-Forward Out-Of-Sample backtesting engine
-│   │   ├── train_mlflow.py        # MLflow model training and tracking pipeline
-│   │   └── test_train.py          # Unit test suite
-│   └── util/
-│       ├── data_collector.py      # Binance futures data downloader
-│       ├── factors.py             # Cross-sectional factor calculation engine
-│       ├── macro_collector.py     # Deribit, Yahoo Finance, FNG & DefiLlama macro API fetcher
-│       ├── metrics.py             # CAGR, Sharpe, Drawdown performance metrics
-│       └── rebalance.py           # Inverse Volatility weighting & portfolio backtest
+│   └── workflows/ci.yml           # Automated CI (canonical tests/ suite)
+├── data/                          # Cached macro + funding CSVs (gitignored)
+├── src/multifactor_mlops/         # CANONICAL pipeline (v4)
+│   ├── config/                    # Strict 1:1 Pydantic schema + loader
+│   ├── data/                      # OHLCV/macro/funding loaders
+│   ├── features/                  # Asset features, macro overlay, panel, preprocessor
+│   ├── labels/                    # Open-to-open labels + purge
+│   ├── optimization/              # Stage 1 ML tuning, Stage 2 strategy tuning, folds
+│   ├── pipelines/                 # OOF generation, single-touch OOS evaluation, fit_final
+│   ├── portfolio/                 # Weights constructor + shared stress overlay
+│   ├── backtest/                  # QuantBT native walk-forward adapter + runner
+│   ├── tracking/                  # MLflow/run manifests
+│   └── register/                  # Production bundle export
+├── tests/                         # Canonical test suite (phase1-3 + v4)
+├── scratch/                       # Isolated verification experiments
+├── artifacts/                     # Locked tuned configs + final OOS results
+├── parameters.json                # Master config (immutable, tuned params live in artifacts/)
 ├── .env.example                   # Sample environment variable file
 ├── .gitignore                     # Git ignore rules
 ├── .pre-commit-config.yaml        # Pre-commit hooks for linting & formatting
-├── CONTRIBUTING.md                # Open-source contribution guidelines
-├── docker-compose.yml             # Docker composition config
-├── Dockerfile                     # Docker environment definition
+├── CONTRIBUTING.md                # Contribution guidelines
+├── Dockerfile                     # Bundle verification container
 ├── LICENSE                        # MIT License
-├── parameters.json                # Central strategy configuration parameters
 └── README.md                      # Strategy documentation
 ```
 
@@ -94,27 +87,39 @@ cd multifactor_portfo
 poetry install
 ```
 
-### 1. Run Feature Selection & Analysis
-Computes feature statistical relevance (OLS P-value, Mutual Information, XGBoost Gain) and extracts active asset-level features:
+### 1. Stage 1 — ML Hyperparameter Tuning (dev window only, rank IC objective)
 ```bash
-PYTHONPATH=. poetry run python -m multifactor_portfolio.research.feature_analysis
+poetry run python -m src.multifactor_mlops.optimization.stage1_ml_tuning --trials 30
+# -> artifacts/model_config.json (locked)
 ```
 
-### 2. Execute Walk-Forward Training & MLflow Model Registration
-Trains the machine learning pipeline under Walk-Forward Out-Of-Sample validation and logs metrics to MLflow:
+### 2. Generate OOF Predictions (dev window)
 ```bash
-PYTHONPATH=. poetry run python -m multifactor_portfolio.training.train_mlflow
+poetry run python -m src.multifactor_mlops.pipelines.generate_oof_predictions
+# -> artifacts/oof_predictions.csv + fold_metrics.json
 ```
 
-### 3. Run Optuna Hyperparameter Optimization
-Runs automated hyperparameter tuning using Optuna:
+### 3. Stage 2 — Strategy & Risk Overlay Tuning (dev window only, QuantBT backtest)
 ```bash
-PYTHONPATH=. poetry run python -m multifactor_portfolio.optimization.optuna_kernel
+poetry run python -m src.multifactor_mlops.optimization.stage2_strategy_tuning --trials 15
+# -> artifacts/strategy_config.json (locked)
 ```
 
-### 4. Run Unit Tests
+### 4. Single-Touch Outer OOS Evaluation (2024-01-01 →)
 ```bash
-poetry run pytest multifactor_portfolio/training/test_train.py
+poetry run python -m src.multifactor_mlops.pipelines.evaluate_final --oos-start 2024-01-01
+# -> artifacts/final_oos_metrics.json + final_oos_report.md
+```
+
+### 5. Export Production Bundle (model + preprocessor + overlay)
+```bash
+poetry run python -m src.multifactor_mlops.register.export_bundle --training-cutoff 2023-12-31
+# -> artifacts/model_bundle/
+```
+
+### 6. Run Unit Tests
+```bash
+poetry run pytest tests/ -q
 ```
 
 ---
