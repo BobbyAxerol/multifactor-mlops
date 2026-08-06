@@ -37,6 +37,7 @@ def build_panel(data_dict, macro_df, funding_wide=None, H=1, ranked=False):
         windows=[7, 14, 30, 60, 90],
         cross_sectional_rank=ranked,
         lag=H,
+        return_type="next_open_to_open",  # research convention (documented in report)
     )
     return builder.build_panel_dataset(
         data_dict, list(data_dict.keys()), macro_df=macro_df, funding_df=funding_wide

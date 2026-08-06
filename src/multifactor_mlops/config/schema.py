@@ -67,16 +67,20 @@ class FeaturesConfig(BaseModel):
 
 class LabelConfig(BaseModel):
     model_config = ConfigDict(extra="ignore")
-    return_type: str = "next_open_to_open"
+    # CANONICAL: next_close_to_close matches the QuantBT engine realization
+    # (decision close D -> fill close D+1 -> exit close D+1+H).
+    return_type: str = "next_close_to_close"
     holding_bars: int = 1
     cross_sectional_demean: bool = True
 
     @field_validator("return_type")
     @classmethod
     def validate_return_type(cls, v: str) -> str:
-        if v != "next_open_to_open":
-            raise ValueError(f"Only 'next_open_to_open' labels are supported (got '{v}'). "
-                             f"Close-to-close labels are prohibited: they are not realizable with 1-bar execution lag.")
+        if v not in {"next_close_to_close", "next_open_to_open"}:
+            raise ValueError(
+                f"Invalid return_type '{v}'. Supported: next_close_to_close (canonical), "
+                f"next_open_to_open (research only)."
+            )
         return v
 
 class ModelConfig(BaseModel):

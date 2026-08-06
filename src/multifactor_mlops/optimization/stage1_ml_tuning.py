@@ -52,6 +52,7 @@ class PureMLStage1Optimizer:
             keep_families=self.app_config.features.keep_families,
             inverted_features=self.app_config.features.inverted_features,
             use_macro_features=self.app_config.features.use_macro_features,
+            return_type=self.app_config.label.return_type,
         )
         panel = builder.build_panel_dataset(
             data_dict=data_dict,

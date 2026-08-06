@@ -96,7 +96,7 @@ def test_config_hygiene_keys():
     assert cfg.features.inverted_features == ["retail_flow_7", "margin_risk_90"]
     assert cfg.features.use_macro_features is False
     assert cfg.data.use_point_in_time_universe is True
-    assert cfg.portfolio.rebalance_schedule == "monday_decide_weekly"
+    assert cfg.portfolio.rebalance_schedule == "daily"
 
 
 def test_composite_signal_mode_no_training(tmp_path):

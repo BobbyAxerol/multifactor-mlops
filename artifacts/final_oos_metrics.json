@@ -5,97 +5,97 @@
   "n_folds": 11,
   "quantbt_metrics": {
     "initial_capital": 100000.0,
-    "final_equity": 121797.264168,
-    "total_return_pct": 21.797264,
-    "cagr_pct": 7.902047,
-    "sharpe": 0.388655,
-    "sortino": 0.440001,
-    "calmar": 0.145207,
-    "omega": 1.059677,
-    "max_drawdown_pct": 54.419077,
-    "avg_drawdown_pct": 29.146582,
-    "max_dd_duration_days": 611.0,
-    "avg_dd_duration_days": 77.0,
-    "profit_factor": 1.059677,
-    "long_hitrate_pct": 42.944411,
-    "short_hitrate_pct": 44.81983,
-    "avg_win_pct": 1.465353,
-    "avg_loss_pct": -1.25206,
-    "expectancy_pct": -0.059601,
-    "num_trades": 14106.0,
+    "final_equity": 110348.83195,
+    "total_return_pct": 10.348832,
+    "cagr_pct": 3.871203,
+    "sharpe": 0.302016,
+    "sortino": 0.327786,
+    "calmar": 0.168263,
+    "omega": 1.055249,
+    "max_drawdown_pct": 23.006836,
+    "avg_drawdown_pct": 8.756101,
+    "max_dd_duration_days": 376.0,
+    "avg_dd_duration_days": 84.0,
+    "profit_factor": 1.055249,
+    "long_hitrate_pct": 35.704771,
+    "short_hitrate_pct": 37.405406,
+    "avg_win_pct": 0.795723,
+    "avg_loss_pct": -0.529111,
+    "expectancy_pct": -0.044817,
+    "num_trades": 13040.0,
     "liquidated": 0.0
   },
   "per_fold_sharpe": [
     {
       "test_start": "2024-01-01",
       "test_end": "2024-03-31",
-      "sharpe": 2.2128,
+      "sharpe": 0.3735,
       "bars": 90
     },
     {
       "test_start": "2024-04-01",
       "test_end": "2024-06-30",
-      "sharpe": 1.1239,
+      "sharpe": -0.2011,
       "bars": 90
     },
     {
       "test_start": "2024-07-01",
       "test_end": "2024-09-30",
-      "sharpe": -3.1794,
+      "sharpe": -4.4524,
       "bars": 91
     },
     {
       "test_start": "2024-10-01",
       "test_end": "2024-12-31",
-      "sharpe": 3.888,
+      "sharpe": 2.2214,
       "bars": 91
     },
     {
       "test_start": "2025-01-01",
       "test_end": "2025-03-31",
-      "sharpe": -2.3984,
+      "sharpe": -1.1585,
       "bars": 89
     },
     {
       "test_start": "2025-04-01",
       "test_end": "2025-06-30",
-      "sharpe": -2.4195,
+      "sharpe": 1.982,
       "bars": 90
     },
     {
       "test_start": "2025-07-01",
       "test_end": "2025-09-30",
-      "sharpe": -2.4791,
+      "sharpe": 0.4266,
       "bars": 91
     },
     {
       "test_start": "2025-10-01",
       "test_end": "2025-12-31",
-      "sharpe": 2.2227,
+      "sharpe": 2.4746,
       "bars": 91
     },
     {
       "test_start": "2026-01-01",
       "test_end": "2026-03-31",
-      "sharpe": 0.959,
+      "sharpe": -0.8832,
       "bars": 89
     },
     {
       "test_start": "2026-04-01",
       "test_end": "2026-06-30",
-      "sharpe": 2.7769,
+      "sharpe": 1.4789,
       "bars": 90
     },
     {
       "test_start": "2026-07-01",
       "test_end": "2026-08-05",
-      "sharpe": -2.8432,
+      "sharpe": -0.5616,
       "bars": 35
     }
   ],
-  "median_fold_sharpe": 0.959,
+  "median_fold_sharpe": 0.3735,
   "oos_equity_start": 100000.0,
-  "oos_equity_end": 121797.26416783959,
+  "oos_equity_end": 110348.83194999282,
   "oos_bars": 948,
   "params": {
     "learning_rate": 0.04,
@@ -104,13 +104,13 @@
     "subsample": 0.8,
     "num_boost_round": 75,
     "random_state": 42,
-    "quantiles": 16,
-    "inverse_vol_period": 42,
-    "rebalance_schedule": "daily",
-    "rebalance_threshold": 0.01,
-    "allocation_cap": 0.25,
-    "volatility_ceiling": 0.08,
-    "stress_multiplier": 0.5
+    "quantiles": 10,
+    "inverse_vol_period": 21,
+    "rebalance_schedule": "weekly_friday_exit",
+    "rebalance_threshold": 0.02,
+    "allocation_cap": 0.30000000000000004,
+    "volatility_ceiling": 0.04,
+    "stress_multiplier": 0.6000000000000001
   },
   "config_snapshot": {
     "run": {
@@ -155,7 +155,7 @@
       "use_macro_features": false
     },
     "label": {
-      "return_type": "next_open_to_open",
+      "return_type": "next_close_to_close",
       "holding_bars": 1,
       "cross_sectional_demean": true
     },
@@ -187,7 +187,7 @@
       "allocation_cap": 0.25,
       "inverse_vol_period": 42,
       "volatility_ceiling": 0.08,
-      "rebalance_schedule": "monday_decide_weekly",
+      "rebalance_schedule": "daily",
       "rebalance_threshold": 0.05,
       "signal_mode": "composite",
       "composite_features": [
@@ -218,5 +218,5 @@
       "use_funding": true
     }
   },
-  "git_sha": "5b1023a"
+  "git_sha": "16dae22"
 }

@@ -91,6 +91,7 @@ class MultiFactorWalkForwardStrategy:
             keep_families=fc.keep_families,
             inverted_features=fc.inverted_features,
             use_macro_features=fc.use_macro_features,
+            return_type=self.app_config.label.return_type,
         )
         panel = builder.build_panel_dataset(
             data_dict=self.data_dict,

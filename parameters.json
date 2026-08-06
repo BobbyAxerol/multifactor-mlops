@@ -26,7 +26,7 @@
     "use_macro_features": false
   },
   "label": {
-    "return_type": "next_open_to_open",
+    "return_type": "next_close_to_close",
     "holding_bars": 1,
     "cross_sectional_demean": true
   },

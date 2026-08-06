@@ -19,7 +19,7 @@ def test_canonical_config_loads_sections():
     cfg = load_config("parameters.json")
     assert cfg.validation.split_mode == "walk_forward_2024"
     assert cfg.validation.split_frequency == "quarterly"
-    assert cfg.label.return_type == "next_open_to_open"
+    assert cfg.label.return_type == "next_close_to_close"
     assert cfg.model.learning_rate == 0.07
     assert cfg.backtest.fee_rate_per_fill == 0.0005
     assert cfg.backtest.use_funding is True

@@ -15,9 +15,13 @@ from src.multifactor_mlops.labels.returns import add_forward_open_labels, filter
 from src.multifactor_mlops.features.panel import PanelDatasetBuilder
 
 
-def _make_ohlcv(n=120, start="2024-01-01"):
+def _make_ohlcv(n=120, start="2024-01-01", seed=None):
     dates = pd.date_range(start, periods=n, freq="1D")
-    close = np.linspace(100, 200, n)
+    if seed is not None:
+        rng = np.random.default_rng(seed)
+        close = 100 * np.cumprod(1 + rng.normal(0.0005, 0.02, n))
+    else:
+        close = np.linspace(100, 200, n)
     return pd.DataFrame({
         "open": close,
         "high": close + 2,
@@ -65,3 +69,35 @@ def test_purge_by_label_end_time():
     train = filter_train_by_label_end(panel, test_start)
     assert (train["label_end_time"] < test_start).all()
     assert len(train) < len(panel)
+
+
+def test_canonical_close_label_matches_engine_realization():
+    """y_D = Close_{D+2}/Close_{D+1} - 1 (H=1) — exactly what QuantBT earns
+    with 1-bar lag (fill close D+1, exit close D+2)."""
+    from src.multifactor_mlops.labels.returns import (
+        add_forward_close_labels, calculate_next_close_to_close_returns)
+    df = _make_ohlcv()
+    out = add_forward_close_labels(df[["close"]], holding_bars=1)
+    assert out["label_start_time"].iloc[0] == df.index[1]
+    assert out["label_end_time"].iloc[0] == df.index[2]
+    assert abs(out["target"].iloc[0] - (df["close"].iloc[2] / df["close"].iloc[1] - 1.0)) < 1e-12
+    assert len(out) == len(df) - 2
+
+    direct = calculate_next_close_to_close_returns(df["close"], holding_bars=1)
+    pd.testing.assert_series_equal(out["target"], direct.dropna())
+
+
+def test_panel_defaults_to_close_labels():
+    from src.multifactor_mlops.labels.returns import calculate_next_close_to_close_returns
+    data_dict = {"AAA": _make_ohlcv(seed=1), "BBB": _make_ohlcv(n=120, start="2024-01-01", seed=2)}
+    builder = PanelDatasetBuilder(windows=[7, 14, 30], cross_sectional_rank=True, lag=1)
+    assert builder.return_type == "next_close_to_close"
+    panel = builder.build_panel_dataset(data_dict, ["AAA", "BBB"])
+    aaa = panel.xs("AAA", level="Symbol").sort_index()
+    raw_full = pd.concat({
+        sym: calculate_next_close_to_close_returns(data_dict[sym]["close"], holding_bars=1).dropna()
+        for sym in data_dict
+    }, axis=1)
+    cs_mean = raw_full.mean(axis=1)
+    expected = (raw_full["AAA"] - cs_mean).dropna()
+    pd.testing.assert_series_equal(aaa["target"].dropna(), expected, check_names=False, check_freq=False)

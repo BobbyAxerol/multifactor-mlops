@@ -149,6 +149,7 @@ def fit_final_production_model(
         keep_families=app_config.features.keep_families,
         inverted_features=app_config.features.inverted_features,
         use_macro_features=app_config.features.use_macro_features,
+        return_type=app_config.label.return_type,
     )
 
     panel_df = panel_builder.build_panel_dataset(

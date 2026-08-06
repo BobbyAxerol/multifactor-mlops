@@ -113,3 +113,31 @@ poetry run pytest tests/ -q
 | V4.2 hygiene + ML daily | -0.76 |
 | V4.2 hygiene + ML monday | -1.14 |
 | **V4.3 composite daily** | **+0.39** |
+
+---
+
+## V4.4 — Fix label lệch mục tiêu: close-to-close = engine-realizable
+
+### Thay đổi
+- `labels/returns.py`: `calculate_next_close_to_close_returns` + `add_forward_close_labels` — **CANONICAL** y_D = Close_{D+2}/Close_{D+1} − 1 (H=1), khớp chính xác engine QuantBT (fill close D+1, PnL close→close). Open-to-open giữ lại chỉ cho research.
+- `panel.py`: `return_type` param (default "next_close_to_close"); strategy/fit_final/stage1/OOF pass từ config.
+- `schema.py`: LabelConfig.return_type default + validator nhận 2 giá trị.
+- `research_base.py`: giữ open-to-open (reproducible theo report).
+
+### Kết quả rerun (close labels)
+| Bước | Giá trị |
+|---|---|
+| Stage 1 best mean IC (dev) | 0.0 |
+| OOF overall rank IC (dev) | +0.0141 |
+| Stage 2 best robust (dev) | (chi tiết trong strategy_trials.json) |
+| **OOS 2024→ composite daily** | **Sharpe +0.30, +10.3% (110.3k), MaxDD -23.0%**, 13040 lệnh |
+
+- MaxDD giảm mạnh -54% → **-23%** (strategy_config mới: allocation_cap 0.30, vol_ceiling 0.04, stress_multiplier 0.6)
+- MLflow: `ea256061f39348ab8e18e2343fe3adb2`
+- Lưu ý: composite signal không dùng label (feature-only) nên Sharpe thay đổi chủ yếu do strategy_config mới + engine convention nhất quán; ML-mode artifacts giờ train trên label khớp engine.
+
+### So sánh OOS cuối
+| Cấu hình | Sharpe OOS | MaxDD |
+|---|---|---|
+| V4.3 composite daily (open labels) | +0.39 | -54.4% |
+| **V4.4 composite daily (close labels, config mới)** | **+0.30** | **-23.0%** |

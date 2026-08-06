@@ -10,7 +10,10 @@ import numpy as np
 from typing import Dict, Any, List, Optional
 from .asset import AssetFeatureTransformer
 from .macro import MacroOverlayTransformer
-from src.multifactor_mlops.labels.returns import add_forward_open_labels
+from src.multifactor_mlops.labels.returns import (
+    add_forward_close_labels,
+    add_forward_open_labels,
+)
 
 # Columns that are NOT model features (label + timing metadata).
 NON_FEATURE_COLUMNS = {'target', 'Symbol', 'decision_time', 'label_start_time', 'label_end_time'}
@@ -38,7 +41,8 @@ class PanelDatasetBuilder:
         lag: int = 1,
         keep_families: Optional[List[str]] = None,
         inverted_features: Optional[List[str]] = None,
-        use_macro_features: bool = True
+        use_macro_features: bool = True,
+        return_type: str = "next_close_to_close"
     ):
         self.asset_transformer = AssetFeatureTransformer(windows=windows)
         self.macro_transformer = MacroOverlayTransformer()
@@ -47,6 +51,30 @@ class PanelDatasetBuilder:
         self.keep_families = list(keep_families) if keep_families else None
         self.inverted_features = set(inverted_features or [])
         self.use_macro_features = use_macro_features
+        self.return_type = return_type
+
+    def _make_labels(self, features_df: pd.DataFrame, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Builds the canonical label + timing columns matching the QuantBT engine
+        (close-to-close by default) or the research open-to-open variant.
+        """
+        if self.return_type == "next_open_to_open":
+            if 'open' not in df.columns:
+                raise ValueError("return_type=next_open_to_open requires an 'open' column.")
+            feats = features_df.copy()
+            feats['open'] = df['open']
+            symbol_df = add_forward_open_labels(feats, holding_bars=self.lag)
+            symbol_df = symbol_df.drop(columns=['open'])
+            return symbol_df
+
+        # canonical: next_close_to_close (engine-realizable)
+        if 'close' not in df.columns:
+            raise ValueError("return_type=next_close_to_close requires a 'close' column.")
+        feats = features_df.copy()
+        feats['close'] = df['close']
+        symbol_df = add_forward_close_labels(feats, holding_bars=self.lag)
+        symbol_df = symbol_df.drop(columns=['close'])
+        return symbol_df
 
     def _select_features(self, features_df: pd.DataFrame) -> pd.DataFrame:
         """Applies evidence-based family filter and sign flips (before ranking)."""
@@ -120,21 +148,9 @@ class PanelDatasetBuilder:
                     merged = merged.drop(columns=[macro_time_col])
                 features_df = merged.set_index(time_col)
 
-            # Return label (Next-Open to Next-Open return) + explicit timing timestamps
-            if 'open' in df.columns:
-                feats_with_open = features_df.copy()
-                feats_with_open['open'] = df['open']
-                symbol_df = add_forward_open_labels(feats_with_open, holding_bars=self.lag)
-                symbol_df = symbol_df.drop(columns=['open'])
-            else:
-                close = df['close']
-                target_returns = (close.shift(-self.lag) / close - 1.0).rename('target')
-                symbol_df = pd.concat([features_df, target_returns], axis=1)
-                time_series = pd.Series(pd.DatetimeIndex(symbol_df.index))
-                symbol_df['decision_time'] = symbol_df.index
-                symbol_df['label_start_time'] = time_series.shift(-1).values
-                symbol_df['label_end_time'] = time_series.shift(-(1 + self.lag)).values
-
+            # Return label (engine-realizable close-to-close by default)
+            # + explicit timing timestamps
+            symbol_df = self._make_labels(features_df, df)
             symbol_df['Symbol'] = symbol
 
             # Mask universe membership if provided (point-in-time)
